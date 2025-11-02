@@ -1,0 +1,149 @@
+ 
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manage Categories</title>
+    <meta name="theme-color" content="#ffca28">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.v1.css">
+    <script src="sw-register.js" defer></script>
+</head>
+
+<body>
+    <main class="wrap category-layout">
+        <header class="top-bar">
+            <div class="top-bar__title">
+                <h1>Category studio</h1>
+            </div>
+        </header>
+        <section class="category-manager">
+            <div class="category-manager__summary" aria-live="polite">
+                <div class="summary-card" aria-label="Total categories">
+                    <span class="summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                            <rect x="13" y="3" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                            <rect x="3" y="13" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                            <rect x="13" y="13" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                        </svg>
+                    </span>
+                    <span class="summary-value" id="totalCategories">0</span>
+                    <span class="visually-hidden">Categories</span>
+                </div>
+                <div class="summary-card summary-card--interactive" id="notesSummaryCard" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="notesBreakdownOverlay" aria-label="Notes tracked breakdown">
+                    <span class="summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M6 3.5h8.5l3.5 3.5V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V5A1.5 1.5 0 0 1 6 3.5z" fill="none" stroke="currentColor" stroke-width="1.5"></path>
+                            <path d="M14.5 3.5V7h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                            <path d="M8 11.5h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                            <path d="M8 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                        </svg>
+                    </span>
+                    <span class="summary-value" id="totalNotes">0</span>
+                    <span class="visually-hidden">Notes tracked</span>
+                </div>
+                <div class="summary-card summary-card--interactive" id="archivedSummaryCard" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="archivedBreakdownOverlay" aria-label="Archived notes breakdown">
+                    <span class="summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M4 6h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" fill="none" stroke="currentColor" stroke-width="1.5"></path>
+                            <path d="M2 6h20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                            <path d="M9 10h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                        </svg>
+                    </span>
+                    <span class="summary-value" id="totalArchived">0</span>
+                    <span class="visually-hidden">Archived notes</span>
+                </div>
+                <div class="summary-card" aria-label="Uncategorized notes">
+                    <span class="summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+                            <path d="M15 9h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                            <circle cx="9" cy="15" r="3" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+                            <path d="M15 15h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                        </svg>
+                    </span>
+                    <span class="summary-value" id="uncategorizedCount">0</span>
+                    <span class="visually-hidden">Uncategorized</span>
+                </div>
+            </div>
+            <label class="category-sort" for="categorySortSelect">
+                <span class="category-sort__label">Sort by</span>
+                <select id="categorySortSelect" class="category-sort__select">
+                    <option value="count-desc">Notes (high to low)</option>
+                    <option value="count-asc">Notes (low to high)</option>
+                    <option value="name-asc">Name A → Z</option>
+                    <option value="name-desc">Name Z → A</option>
+                </select>
+            </label>
+            <p id="categoryStatus" class="category-status" role="status" hidden></p>
+            <ul id="categoryList" class="category-manager__list" aria-live="polite" aria-label="Category list"></ul>
+        </section>
+    </main>
+    <nav class="bottom-nav" aria-label="App navigation">
+        <a class="bottom-nav__item" href="index.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Capture</span>
+        </a>
+        <a class="bottom-nav__item" href="review.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Review</span>
+        </a>
+        <a class="bottom-nav__item is-active" href="categories.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a8 8 0 1 0 0 16h1a1.5 1.5 0 0 0 0-3h-.75a2.75 2.75 0 0 1 0-5.5h.25a2.5 2.5 0 0 0 0-5H12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="15.5" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="9" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Categories</span>
+        </a>
+    </nav>
+    <div id="notesBreakdownOverlay" class="notes-overlay" role="dialog" aria-modal="true" aria-labelledby="notesOverlayTitle" hidden>
+        <div class="notes-overlay__panel" tabindex="-1">
+            <header class="notes-overlay__header">
+                <h2 id="notesOverlayTitle">Notes breakdown</h2>
+                <button type="button" class="notes-overlay__close" aria-label="Close notes breakdown" id="notesOverlayCloseBtn">
+                    Close
+                </button>
+            </header>
+            <div class="notes-overlay__content">
+                <canvas id="notesBreakdownChart" width="320" height="320" aria-hidden="true"></canvas>
+                <div class="notes-overlay__legend-wrap" id="notesBreakdownLegendWrap">
+                    <ul id="notesBreakdownLegend" class="notes-overlay__legend" aria-live="polite"></ul>
+                </div>
+                <p id="notesOverlayEmptyState" class="notes-overlay__empty" hidden>No notes yet. Start capturing ideas to see the breakdown.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="archivedBreakdownOverlay" class="notes-overlay" role="dialog" aria-modal="true" aria-labelledby="archivedOverlayTitle" hidden>
+        <div class="notes-overlay__panel" tabindex="-1">
+            <header class="notes-overlay__header">
+                <h2 id="archivedOverlayTitle">Archived breakdown</h2>
+                <button type="button" class="notes-overlay__close" aria-label="Close archived breakdown" id="archivedOverlayCloseBtn">
+                    Close
+                </button>
+            </header>
+            <div class="notes-overlay__content">
+                <canvas id="archivedBreakdownChart" width="320" height="320" aria-hidden="true"></canvas>
+                <div class="notes-overlay__legend-wrap" id="archivedBreakdownLegendWrap">
+                    <ul id="archivedBreakdownLegend" class="notes-overlay__legend" aria-live="polite"></ul>
+                </div>
+                <p id="archivedOverlayEmptyState" class="notes-overlay__empty" hidden>No archived notes yet.</p>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="js/categories.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,94 @@
+.signin-container {
+    max-width: 500px;
+    margin: 60px auto;
+    padding: 24px;
+}
+.signin-card {
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.signin-card h1 {
+    margin: 0 0 12px 0;
+    font-size: 24px;
+    color: #333;
+}
+.signin-card p {
+    margin: 0 0 24px 0;
+    color: #555;
+    line-height: 1.6;
+}
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-primary:hover {
+    background: #0056b3;
+}
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+.status-message {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+.status-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.status-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+.status-message.info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+.help-text {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-left: 3px solid #007bff;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #666;
+}
+.help-text strong {
+    color: #333;
+}
+.alternative {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #eee;
+    text-align: center;
+}
+.google-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.google-btn::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    background: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"%3E%3Cpath fill="%234285F4" d="M24 9.5c3.54 0 6 1.54 7.38 2.84l5.36-5.36C33.64 3.64 29.18 1.5 24 1.5 14.62 1.5 6.74 7.54 3.22 16.02l6.88 5.35C11.8 13.97 17.4 9.5 24 9.5z"/%3E%3Cpath fill="%2334A853" d="M46.5 24.5c0-1.64-.15-3.22-.42-4.75H24v9.01h12.7c-.55 2.97-2.21 5.49-4.72 7.18l7.36 5.72C43.93 37.7 46.5 31.62 46.5 24.5z"/%3E%3Cpath fill="%23FBBC05" d="M10.1 28.67c-.45-1.31-.7-2.71-.7-4.17s.25-2.86.7-4.17l-6.88-5.35C1.82 18.27 1 21.07 1 24c0 2.93.82 5.73 2.22 8.02l6.88-5.35z"/%3E%3Cpath fill="%23EA4335" d="M24 46.5c5.18 0 9.64-1.71 12.86-4.66l-7.36-5.72c-2.04 1.37-4.66 2.17-7.5 2.17-6.6 0-12.2-4.47-14.02-10.67l-6.88 5.35C6.74 40.46 14.62 46.5 24 46.5z"/%3E%3Cpath fill="none" d="M1 1h46v46H1z"/%3E%3C/svg%3E') no-repeat center/contain;
+}

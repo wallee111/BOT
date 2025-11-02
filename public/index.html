@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quick Idea</title>
+    <meta name="theme-color" content="#ffca28">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.v1.css">
+    <link rel="stylesheet" href="tailwind.css?v=2">
+    <script src="sw-register.js" defer></script>
+</head>
+
+<body>
+    <main class="wrap capture-layout">
+        <header class="top-bar flex items-center justify-between gap-4">
+            <div class="top-bar__title flex-1">
+                <h1 class="sm:tracking-tight">Bucket of thoughts</h1>
+            </div>
+            <div class="top-bar__controls flex items-center gap-3 flex-wrap justify-end">
+                <a class="icon-link" href="account.html" aria-label="Account">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                        <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </a>
+            </div>
+        </header>
+        <section class="conversation">
+            <div class="conversation-inner">
+                <div class="feed-wrapper">
+                    <div class="feed-tabs" role="tablist">
+                        <button type="button" class="feed-tab" id="tab-focus" data-tab="focus" role="tab" aria-selected="false" aria-haspopup="listbox" aria-expanded="false">
+                            <span id="focusTabLabel">Category</span>
+                            <span class="feed-tab__icon" aria-hidden="true">+</span>
+                        </button>
+                        <button type="button" class="feed-tab is-active" id="tab-main" data-tab="main" role="tab" aria-selected="true">
+                            Active
+                        </button>
+                        <button type="button" class="feed-tab" id="tab-hidden" data-tab="hidden" role="tab" aria-selected="false">
+                            Hidden
+                        </button>
+                    </div>
+                    <div id="focusCategoryMenu" class="focus-category-menu focus-category-menu--tab" hidden role="listbox" aria-label="Choose category"></div>
+                    <div class="feed-slider" id="feedSlider">
+                        <div class="feed-carousel" id="feedCarousel" data-active="main">
+                            <div class="feed-panel" data-panel="focus" role="tabpanel" aria-labelledby="tab-focus" aria-hidden="true">
+                                <div class="focus-feed">
+                                    <div id="focusFeed" class="ideas-feed" aria-live="polite"></div>
+                                </div>
+                            </div>
+                            <div class="feed-panel" data-panel="main" role="tabpanel" aria-labelledby="tab-main">
+                                <div id="pinnedIdeaContainer" class="pinned-idea-container" hidden></div>
+                                <div id="ideasFeed" class="ideas-feed" aria-live="polite">
+                                    <!-- Ideas will be dynamically inserted here -->
+                                </div>
+                            </div>
+                            <div class="feed-panel" data-panel="hidden" role="tabpanel" aria-labelledby="tab-hidden" aria-hidden="true">
+                                <div id="hiddenIdeasFeed" class="ideas-feed" aria-live="polite">
+                                    <!-- Hidden ideas will be dynamically inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="entry-panel">
+                <form id="ideaForm">
+                    <div class="textarea-wrap">
+                        <textarea id="text" placeholder="What's on your mind?…" maxlength="500" required></textarea>
+                        <button type="submit" class="save-btn">Save</button>
+                    </div>
+                    <div class="category-row">
+                        <input id="categoryNew" placeholder="Or add a new category" autocomplete="off" />
+                        <div class="select-wrap icon-only" data-label="#">
+                            <select id="categorySelect" aria-label="Choose category">
+                                <option value="">Choose category…</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+        <p id="toast" class="toast" hidden>Saved!</p>
+        <!-- Anchored Category Edit Dropdown (shared style with review) -->
+        <div id="categoryEditDropdown" class="category-edit-dropdown" hidden>
+            <div id="categoryEditDropdownContent" class="category-edit-dropdown__content"></div>
+        </div>
+    </main>
+    <nav class="bottom-nav" aria-label="App navigation">
+        <a class="bottom-nav__item is-active" href="index.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Capture</span>
+        </a>
+        <a class="bottom-nav__item" href="review.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Review</span>
+        </a>
+        <a class="bottom-nav__item" href="categories.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a8 8 0 1 0 0 16h1a1.5 1.5 0 0 0 0-3h-.75a2.75 2.75 0 0 1 0-5.5h.25a2.5 2.5 0 0 0 0-5H12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="15.5" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="9" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Categories</span>
+        </a>
+    </nav>
+    <script type="module" src="js/index.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review Ideas</title>
+    <link rel="stylesheet" href="style.v1.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffca28">
+    <script src="sw-register.js" defer></script>
+</head>
+
+<body>
+    <main class="wrap review-layout">
+        <header class="top-bar">
+            <div class="top-bar__title">
+                <h1>Your Ideas</h1>
+            </div>
+        </header>
+        <div class="filters">
+            <div class="select-wrap filter-select filter-select--status">
+                <select id="status">
+                    <option value="all">All items</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="select-wrap filter-select filter-select--category">
+                <button type="button" id="categoryFilterToggle" class="filter-multi-toggle" aria-haspopup="true" aria-expanded="false"><span>All categories</span></button>
+                <div id="categoryFilterPanel" class="filter-multi-panel" hidden>
+                    <div id="categoryFilterOptions" class="filter-multi-options"></div>
+                    <div class="filter-multi-actions">
+                        <button type="button" data-filter-clear>Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <select id="cat" multiple hidden></select>
+        <ul id="list" class="list"></ul>
+        <!-- Anchored Category Edit Dropdown -->
+        <div id="categoryEditDropdown" class="category-edit-dropdown" hidden>
+            <div id="categoryEditDropdownContent" class="category-edit-dropdown__content"></div>
+        </div>
+    </main>
+    
+    <!-- Category Add Modal -->
+    <div id="categoryAddModal" class="category-modal" hidden role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+        <div class="category-modal__overlay"></div>
+        <div class="category-modal__panel">
+            <div class="category-modal__header">
+                <h3 id="categoryModalTitle">Add Category</h3>
+                <button type="button" class="category-modal__close" aria-label="Close">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                        <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+            <div class="category-modal__content" id="categoryModalContent">
+                <!-- Category options will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="search-fab" id="searchFab">
+        <button type="button" class="search-fab__toggle" aria-label="Search ideas" aria-expanded="false" aria-controls="q">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2" />
+                <line x1="16" y1="16" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+        </button>
+        <div class="search-fab__panel" hidden>
+            <label class="visually-hidden" for="q">Search ideas</label>
+            <input id="q" type="search" placeholder="Search…" autocomplete="off" />
+            <button type="button" class="search-fab__clear" aria-label="Clear search">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <nav class="bottom-nav" aria-label="App navigation">
+        <a class="bottom-nav__item" href="index.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Capture</span>
+        </a>
+        <a class="bottom-nav__item is-active" href="review.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Review</span>
+        </a>
+        <a class="bottom-nav__item" href="categories.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a8 8 0 1 0 0 16h1a1.5 1.5 0 0 0 0-3h-.75a2.75 2.75 0 0 1 0-5.5h.25a2.5 2.5 0 0 0 0-5H12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="15.5" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="9" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Categories</span>
+        </a>
+    </nav>
+    <script type="module" src="js/review.js"></script>
+
+</body>
+
+</html>

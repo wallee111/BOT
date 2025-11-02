@@ -1,0 +1,11 @@
+{
+  "name": "device-dev-1",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/styles/tailwind.css -o ./public/tailwind.css --min",
+    "watch:css": "tailwindcss -i ./src/styles/tailwind.css -o ./public/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.10"
+  }
+}

@@ -1,0 +1,141 @@
+body {
+    overflow: auto !important;
+    min-height: 100vh;
+    padding-bottom: 80px;
+}
+
+.settings-container {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 24px;
+    padding-bottom: 100px;
+}
+.settings-card {
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+.settings-card h1 {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+    color: #333;
+}
+.settings-card h2 {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    color: #333;
+}
+.settings-card p {
+    margin: 0 0 16px 0;
+    color: #666;
+    line-height: 1.5;
+}
+.userid-display {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 13px;
+    word-break: break-all;
+    margin-bottom: 12px;
+    color: #333;
+}
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+.btn-primary:hover {
+    background: #0056b3;
+}
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+.btn-success:hover {
+    background: #218838;
+}
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+.btn-danger:hover {
+    background: #c82333;
+}
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+.btn-secondary:hover {
+    background: #545b62;
+}
+.button-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.status-message {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+.status-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.status-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+.account-name {
+    color: #444;
+    margin: 0 0 12px 0;
+}
+.help-text {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    color: #555;
+    border: 1px solid #e2e6ea;
+}
+.help-text ol {
+    margin: 8px 0 0 18px;
+    padding: 0;
+    color: #555;
+}
+.help-text li + li {
+    margin-top: 4px;
+}
+.warning-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+.warning-box strong {
+    color: #856404;
+    display: block;
+    margin-bottom: 8px;
+}
+.warning-box p {
+    color: #856404;
+    margin: 0;
+}

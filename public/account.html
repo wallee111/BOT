@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings - Device Dev</title>
+    <link rel="stylesheet" href="style.v1.css">
+    <link rel="stylesheet" href="css/account.css">
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-card">
+            <h1>Account Settings</h1>
+            <p>Manage your account and data.</p>
+            
+            <h2>Your Account</h2>
+            <p>Signed in as <span id="userEmailDisplay">Loading…</span></p>
+            <p class="account-name">Display name: <span id="userNameDisplay">Loading…</span></p>
+            <p>Your Firebase User ID:</p>
+            <div class="userid-display" id="userIdDisplay">Loading...</div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="copyBtn" disabled>
+                    Copy User ID
+                </button>
+            </div>
+
+            <div id="copyStatus" class="status-message"></div>
+        </div>
+        
+        <div class="settings-card">
+            <h2>Sign Out</h2>
+            <p>Sign out and clear your local session. You'll sign back in with Google next time.</p>
+            
+            <div class="warning-box">
+                <strong>Heads up</strong>
+                <p>Copy your User ID above if you ever need to share it with support.</p>
+            </div>
+            
+            <button class="btn btn-danger" id="signOutBtn">
+                Sign Out
+            </button>
+        </div>
+        
+        <div class="settings-card">
+            <h2>Legacy User ID Migration</h2>
+            <p>If you previously signed in with a legacy User ID, we can migrate those notes to your Google account.</p>
+            <div class="help-text">
+                <strong>Need help migrating?</strong>
+                <ol>
+                    <li>Sign in with Google above.</li>
+                    <li>Send your legacy User ID to the support team.</li>
+                    <li>We will map your old notes to this Google account and let you know when it is complete.</li>
+                </ol>
+            </div>
+            <a href="signin.html" class="btn btn-secondary">
+                Switch Google Account
+            </a>
+        </div>
+    </div>
+
+    <nav class="bottom-nav" aria-label="App navigation">
+        <a class="bottom-nav__item" href="index.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Capture</span>
+        </a>
+        <a class="bottom-nav__item" href="review.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Review</span>
+        </a>
+        <a class="bottom-nav__item" href="categories.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a8 8 0 1 0 0 16h1a1.5 1.5 0 0 0 0-3h-.75a2.75 2.75 0 0 1 0-5.5h.25a2.5 2.5 0 0 0 0-5H12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="15.5" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="9" cy="9" r="1.1" fill="currentColor" />
+                <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Categories</span>
+        </a>
+    </nav>
+    <script type="module" src="js/account.js"></script>
+
+</body>
+</html>
