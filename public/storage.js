@@ -40,6 +40,8 @@ const db = getFirestore(app);
 const ideasCollection = collection(db, 'ideas');
 const categorySettingsCollection = collection(db, 'categorySettings');
 
+
+
 let ideasCache = null;
 let categorySettingsCache = null;
 let categorySettingsFetchDisabled = false;
