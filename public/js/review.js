@@ -670,7 +670,6 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
 
             // Check if ideasCache is initialized
             if (!ideasCache || !Array.isArray(ideasCache)) {
-                console.log('[render] ideasCache not ready yet');
                 list.innerHTML = '<p>Loading...</p>';
                 return;
             }

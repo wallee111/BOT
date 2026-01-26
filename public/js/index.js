@@ -38,8 +38,21 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
         const textInput = $('#text');
         const categorySelect = $('#categorySelect');
         const categoryNew = $('#categoryNew');
+        const categoryRow = categoryNew?.closest('.category-row');
+        let categorySuggestions = document.getElementById('categorySuggestions');
+        if (!categorySuggestions && categoryRow) {
+            categorySuggestions = document.createElement('div');
+            categorySuggestions.id = 'categorySuggestions';
+            categorySuggestions.className = 'category-suggestions';
+            categorySuggestions.hidden = true;
+            categoryRow.appendChild(categorySuggestions);
+        }
+        if (categorySuggestions) {
+            categorySuggestions.setAttribute('role', 'listbox');
+        }
         const categoryIcon = document.querySelector('.select-wrap.icon-only');
         const toast = $('#toast');
+        const saveBtn = document.querySelector('.save-btn');
     const categoryEditDropdown = document.getElementById('categoryEditDropdown');
     const categoryEditDropdownContent = document.getElementById('categoryEditDropdownContent');
     let categoryDropdownAnchor = null;
@@ -70,6 +83,105 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             if (categoryIcon) {
                 categoryIcon.dataset.label = label || '#';
             }
+        }
+
+        function hideCategorySuggestions() {
+            if (categorySuggestions) {
+                categorySuggestions.hidden = true;
+                categorySuggestions.innerHTML = '';
+                categorySuggestions.removeAttribute('data-state');
+            }
+        }
+
+        function shouldAutoApplyFocusCategory() {
+            return activeTab === 'focus' && focusCategory && focusCategory !== '__uncategorized__';
+        }
+
+        function getMatchingCategories(query) {
+            const trimmed = (query || '').trim().toLowerCase();
+            if (!availableCategories.length) {
+                return [];
+            }
+            const list = availableCategories.filter(Boolean);
+            const sortedByUsage = list.slice().sort((a, b) => {
+                const usageDiff = getCategoryUsageScore(b) - getCategoryUsageScore(a);
+                if (usageDiff !== 0) {
+                    return usageDiff;
+                }
+                return CATEGORY_COLLATOR.compare(a, b);
+            });
+            if (!trimmed) {
+                return sortedByUsage;
+            }
+            return sortedByUsage
+                .filter(category => category.toLowerCase().includes(trimmed))
+                .sort((a, b) => {
+                    const aLower = a.toLowerCase();
+                    const bLower = b.toLowerCase();
+                    const aStarts = aLower.startsWith(trimmed);
+                    const bStarts = bLower.startsWith(trimmed);
+                    if (aStarts !== bStarts) {
+                        return aStarts ? -1 : 1;
+                    }
+                    const usageDiff = getCategoryUsageScore(b) - getCategoryUsageScore(a);
+                    if (usageDiff !== 0) {
+                        return usageDiff;
+                    }
+                    return CATEGORY_COLLATOR.compare(a, b);
+                });
+        }
+
+        function updateCategorySuggestions(query) {
+            if (!categorySuggestions || shouldAutoApplyFocusCategory()) {
+                hideCategorySuggestions();
+                return [];
+            }
+            const matches = getMatchingCategories(query).slice(0, 6);
+            if (!matches.length) {
+                hideCategorySuggestions();
+                return matches;
+            }
+            categorySuggestions.innerHTML = '';
+            matches.forEach(category => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'category-suggestion';
+                button.textContent = category;
+                button.setAttribute('role', 'option');
+                button.addEventListener('click', () => {
+                    categoryNew.value = category;
+                    categorySelect.value = '';
+                    refreshCategoryIndicator();
+                    hideCategorySuggestions();
+                    categoryNew.focus({ preventScroll: true });
+                });
+                categorySuggestions.appendChild(button);
+            });
+            categorySuggestions.hidden = false;
+            categorySuggestions.setAttribute('data-state', 'visible');
+            return matches;
+        }
+
+        function syncCategoryFormToFocus() {
+            if (!shouldAutoApplyFocusCategory() || !categorySelect) {
+                hideCategorySuggestions();
+                return;
+            }
+            const target = focusCategory.trim();
+            const options = Array.from(categorySelect.options);
+            let match = options.find(option => option.value.trim().toLowerCase() === target.toLowerCase());
+            if (!match) {
+                match = document.createElement('option');
+                match.value = target;
+                match.textContent = target;
+                categorySelect.appendChild(match);
+            }
+            categorySelect.value = match.value;
+            if (categoryNew) {
+                categoryNew.value = '';
+            }
+            refreshCategoryIndicator();
+            hideCategorySuggestions();
         }
 
         async function updateCategoryList(preferredCategory) {
@@ -118,6 +230,12 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             if (allIdeas.length) {
                 renderFeeds(allIdeas);
             }
+            syncCategoryFormToFocus();
+            if (categoryNew && categoryNew.value.trim() && !shouldAutoApplyFocusCategory()) {
+                updateCategorySuggestions(categoryNew.value.trim());
+            } else {
+                hideCategorySuggestions();
+            }
         }
 
         categorySelect.addEventListener('change', () => {
@@ -130,9 +248,42 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
         categoryNew.addEventListener('input', () => {
             if (categoryNew.value.trim()) {
                 categorySelect.value = '';
+                updateCategorySuggestions(categoryNew.value);
+            } else {
+                hideCategorySuggestions();
             }
             refreshCategoryIndicator();
         });
+
+        categoryNew.addEventListener('focus', () => {
+            if (categoryNew.value.trim()) {
+                updateCategorySuggestions(categoryNew.value);
+            } else if (!shouldAutoApplyFocusCategory()) {
+                updateCategorySuggestions('');
+            }
+        });
+
+        categoryNew.addEventListener('blur', () => {
+            setTimeout(() => {
+                hideCategorySuggestions();
+            }, 120);
+        });
+
+        // iOS-style save button reveal
+        function toggleSaveButton() {
+            const hasContent = textInput.value.trim().length > 0;
+            if (saveBtn) {
+                saveBtn.hidden = !hasContent;
+            }
+        }
+
+        textInput.addEventListener('input', toggleSaveButton);
+        textInput.addEventListener('change', toggleSaveButton);
+        
+        // Initialize save button state on load
+        if (saveBtn) {
+            toggleSaveButton();
+        }
 
         function applyAppearanceStyles(target, appearance) {
             if (!appearance?.style) return;
@@ -250,6 +401,7 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
                 /* noop */
             }
             updateFocusCategoryLabel();
+            syncCategoryFormToFocus();
             renderFeeds(allIdeas);
         }
 
@@ -386,26 +538,41 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             const showPinControl = !hiddenView;
             const pinIcon = `
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8 3.5h8l-1 6h3l-5.5 5.5V21l-2.5-1.5v-4L5 9.5h3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+                    <path d="M12 3.5l3.5 3.5h-2v6l2.5 2.5v1.5l-4-2.3-4 2.3v-1.5L10.5 13V7H8.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+                </svg>
+            `;
+            const threadIcon = `
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 5h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-4.5L12 21l-2.5-3.5H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M8.5 9.5h7M8.5 13h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
                 </svg>
             `;
             const pinButtonMarkup = showPinControl
                 ? `<button type="button" class="idea-pin${isPinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${isPinned ? 'true' : 'false'}" aria-pressed="${isPinned ? 'true' : 'false'}" aria-label="${isPinned ? 'Unpin idea' : 'Pin idea'}">${pinIcon}</button>`
                 : '';
+            const threadButtonMarkup = showPinControl
+                ? `<button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Open thread">${threadIcon}</button>`
+                : '';
             ideaEl.innerHTML = `
-            ${pinButtonMarkup}
             <div class="idea-body">
-                <div class="idea-categories"></div>
+                <div class="idea-header">
+                    <div class="idea-categories"></div>
+                    <div class="idea-time">${timeMarkup}</div>
+                </div>
                 <p class="idea-text">${escapeHtml(idea.text)}</p>
                 <div class="idea-footer">
-                    <div class="idea-time">${timeMarkup}</div>
+                    <div class="idea-actions">
+                        ${pinButtonMarkup}
+                        ${threadButtonMarkup}
+                    </div>
                     <button type="button" class="idea-hide" data-id="${idea.id}" data-action="${buttonAction}" aria-label="${buttonAria}">${buttonLabel}</button>
                 </div>
             </div>`;
 
             // Replace categories section with interactive chip group + add button
             const body = ideaEl.querySelector('.idea-body');
-            const oldCats = body?.querySelector('.idea-categories');
+            const header = body?.querySelector('.idea-header');
+            const oldCats = header?.querySelector('.idea-categories');
             const categoryGroup = document.createElement('div');
             categoryGroup.className = 'category-chip-group';
             categoryGroup.dataset.ideaId = idea.id;
@@ -427,7 +594,7 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             if (oldCats && oldCats.parentNode) {
                 oldCats.parentNode.replaceChild(categoryGroup, oldCats);
             } else {
-                body?.insertBefore(categoryGroup, body.firstChild);
+                header?.insertBefore(categoryGroup, header.firstChild);
             }
             return ideaEl;
         }
@@ -664,10 +831,15 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
                 row.append(checkbox, bubble);
                 container.appendChild(row);
             });
+            const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
             if (autoScroll) {
-                container.scrollTop = container.scrollHeight;
+                if (isAtBottom) {
+                    container.scrollTop = maxScrollTop;
+                } else {
+                    container.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+                }
             } else if (!hiddenView && !isAtBottom) {
-                container.scrollTop = Math.min(previousScrollTop, container.scrollHeight - container.clientHeight);
+                container.scrollTop = Math.min(previousScrollTop, maxScrollTop);
             }
         }
 
@@ -765,6 +937,7 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             if (tab !== 'focus') {
                 closeFocusCategoryMenu();
             }
+            syncCategoryFormToFocus();
         }
 
         function handleTabClick(event) {
@@ -793,7 +966,7 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
 
         feedTabs.forEach(btn => btn.addEventListener('click', handleTabClick));
 
-        const SWIPE_IGNORE_SELECTOR = 'button, a, input, textarea, select, label, [role="button"], .idea-pin, .focus-category-toggle, .category-add-btn, .focus-category-menu, .category-add-menu';
+        const SWIPE_IGNORE_SELECTOR = 'button, a, input, textarea, select, label, [role="button"], .idea-pin, .idea-thread, .focus-category-toggle, .category-add-btn, .focus-category-menu, .category-add-menu';
 
         function handleSwipeStart(event) {
             if (!event.isPrimary) return;
@@ -895,7 +1068,16 @@ import { getCurrentUserId, ensureAuthSession } from '../auth.js';
             if (!text) return;
 
             const manualCategory = categoryNew.value.trim();
-            const selectedCategory = manualCategory || (categorySelect.value || '').trim();
+            let selectedCategory = manualCategory || (categorySelect.value || '').trim();
+            if (shouldAutoApplyFocusCategory()) {
+                selectedCategory = focusCategory.trim();
+            } else if (manualCategory) {
+                const matches = getMatchingCategories(manualCategory);
+                if (matches.length === 1) {
+                    selectedCategory = matches[0];
+                    categoryNew.value = matches[0];
+                }
+            }
             const categories = selectedCategory ? [selectedCategory] : [];
 
             const idea = {

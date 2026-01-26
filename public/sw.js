@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'pwa-cache-v2';
+const CACHE_VERSION = 'pwa-cache-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/review.html',
   '/style.v1.css',
-  '/css/signin.css',
+  '/css/signin.css?v=3',
   '/css/account.css',
   '/storage.js?v=3',
   '/utils.js?v=2',
@@ -13,7 +13,7 @@ const PRECACHE_URLS = [
   '/js/review.js',
   '/js/categories.js',
   '/js/account.js',
-  '/js/signin.js',
+  '/js/signin.js?v=3',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png'

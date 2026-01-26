@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="google-site-verification" content="tfMfdsdR2upq49V2q3684uIypjQqaQyPfFfKL3REp3c" />
     <title>Quick Idea</title>
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="manifest.json">
@@ -69,15 +70,20 @@
                 <form id="ideaForm">
                     <div class="textarea-wrap">
                         <textarea id="text" placeholder="What's on your mind?…" maxlength="500" required></textarea>
-                        <button type="submit" class="save-btn">Save</button>
-                    </div>
-                    <div class="category-row">
-                        <input id="categoryNew" placeholder="Or add a new category" autocomplete="off" />
-                        <div class="select-wrap icon-only" data-label="#">
+                        <button type="submit" class="save-btn" aria-label="Save">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 4v13m0 0l-4-4m4 4l4-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </button>
+                        <div class="select-wrap icon-only category-select-btn" data-label="#">
                             <select id="categorySelect" aria-label="Choose category">
                                 <option value="">Choose category…</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="category-row">
+                        <input id="categoryNew" placeholder="Or add a new category" autocomplete="off" />
+                        <div id="categorySuggestions" class="category-suggestions" hidden></div>
                     </div>
                 </form>
             </div>

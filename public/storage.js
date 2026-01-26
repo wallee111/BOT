@@ -9,7 +9,6 @@ import {
     deleteDoc,
     updateDoc,
     writeBatch,
-    orderBy,
     query,
     where,
     onSnapshot,
@@ -19,12 +18,12 @@ import { HEX_COLOR_PATTERN, normalizeCategories } from './utils.js?v=2';
 import { getCurrentUserId } from './auth.js';
 
 const firebaseConfig = {
-    apiKey: 'AIzaSyAQzyF1tkzPtmR3jTBaV5I5wZMrTdroX6A',
-    authDomain: 'device-dev-1-c0700.firebaseapp.com',
-    projectId: 'device-dev-1-c0700',
-    storageBucket: 'device-dev-1-c0700.firebasestorage.app',
-    messagingSenderId: '494337535749',
-    appId: '1:494337535749:web:fb1c8bfb05b6364490916c'
+  apiKey: "AIzaSyDHs4GyV3smDzpLNC48XkevxKPVr7M4zUM",
+  authDomain: "bucket0f-thoughts.firebaseapp.com",
+  projectId: "bucket0f-thoughts",
+  storageBucket: "bucket0f-thoughts.firebasestorage.app",
+  messagingSenderId: "843739263347",
+  appId: "1:843739263347:web:22de8065b8ace43e825506"
 };
 
 const LOCAL_CACHE_KEY = 'ideas_v1_cache';
@@ -166,8 +165,6 @@ function normalizeIdea(docSnap) {
 
 async function fetchIdeasFromFirestore() {
     const userId = await getCurrentUserId();
-    console.log('[fetchIdeasFromFirestore] Fetching with userId:', userId);
-    
     if (!userId) {
         console.warn('[fetchIdeasFromFirestore] No user ID available, cannot fetch ideas');
         return [];
@@ -180,12 +177,6 @@ async function fetchIdeasFromFirestore() {
         where('userId', '==', userId)
     );
     const snapshot = await getDocs(q);
-    console.log('[fetchIdeasFromFirestore] Found', snapshot.size, 'documents');
-    
-    snapshot.docs.forEach(doc => {
-        console.log('[fetchIdeasFromFirestore] Document:', doc.id, 'userId:', doc.data().userId);
-    });
-    
     // Sort in memory
     ideasCache = snapshot.docs.map(normalizeIdea).sort((a, b) => a.createdAt - b.createdAt);
     writeIdeasToLocal(ideasCache);
@@ -519,22 +510,16 @@ export function subscribeToIdeas(callback) {
             console.warn('[subscribeToIdeas] No userId; skipping Firestore subscription.');
             return;
         }
-        console.log('[subscribeToIdeas] Subscribing with userId:', userId);
-        
         // Query without orderBy to avoid needing a composite index
         // We'll sort in memory instead
         const q = query(
             ideasCollection,
             where('userId', '==', userId)
         );
-        
         unsubscribe = onSnapshot(q, (snapshot) => {
-            console.log('[subscribeToIdeas] Received snapshot with', snapshot.size, 'documents');
-            
             const ideas = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                console.log('[subscribeToIdeas] Document:', doc.id, 'userId:', data.userId);
                 ideas.push({
                     id: doc.id,
                     ...data
@@ -543,8 +528,6 @@ export function subscribeToIdeas(callback) {
             
             // Sort in memory by createdAt descending
             ideas.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            
-            console.log('[subscribeToIdeas] Total ideas after sorting:', ideas.length);
             
             // Update cache and localStorage
             ideasCache = ideas;

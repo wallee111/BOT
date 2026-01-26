@@ -1,22 +1,21 @@
 // Authentication module for the app
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {
-    getAuth,
-    onAuthStateChanged,
-    GoogleAuthProvider,
-    signInWithPopup,
-    signOut
+  getAuth,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
 } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 
 const firebaseConfig = {
-    apiKey: 'AIzaSyAQzyF1tkzPtmR3jTBaV5I5wZMrTdroX6A',
-    authDomain: 'device-dev-1-c0700.firebaseapp.com',
-    projectId: 'device-dev-1-c0700',
-    storageBucket: 'device-dev-1-c0700.firebasestorage.app',
-    messagingSenderId: '494337535749',
-    appId: '1:494337535749:web:fb1c8bfb05b6364490916c'
+  apiKey: "AIzaSyDHs4GyV3smDzpLNC48XkevxKPVr7M4zUM",
+  authDomain: "bucket0f-thoughts.firebaseapp.com",
+  projectId: "bucket0f-thoughts",
+  storageBucket: "bucket0f-thoughts.firebasestorage.app",
+  messagingSenderId: "843739263347",
+  appId: "1:843739263347:web:22de8065b8ace43e825506"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();

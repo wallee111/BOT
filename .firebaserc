@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "device-dev-1-c0700"
-  }
+    "default": "device-dev-1-c0700",
+    "bot-staging": "bucket0f-thoughts"
+  },
+  "targets": {},
+  "etags": {}
 }

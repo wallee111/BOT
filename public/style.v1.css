@@ -244,21 +244,71 @@ body {
 
 .textarea-wrap {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: stretch;
 }
 
 .textarea-wrap textarea {
-    padding-right: 4.5rem;
+    grid-column: 1;
+    grid-row: 1;
+    padding-right: 3.5rem;
+    min-height: 60px;
 }
 
 .textarea-wrap .save-btn {
     position: absolute;
-    right: 16px;
-    bottom: 16px;
-    height: 40px;
-    padding: 0 18px;
-    border-radius: 999px;
+    right: 68px;
+    bottom: 12px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+    background: #ffca28;
+    color: #1b1b1f;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+    z-index: 2;
+    opacity: 0;
+    transform: scale(0.8);
+    pointer-events: none;
+}
+
+.textarea-wrap .save-btn:not([hidden]) {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.textarea-wrap .save-btn[hidden] {
+    display: none;
+}
+
+.textarea-wrap .save-btn svg {
+    width: 18px;
+    height: 18px;
+    transform: rotate(180deg);
+}
+
+.textarea-wrap .save-btn:hover {
+    background: #ffd84d;
+    transform: scale(1.08);
+}
+
+.textarea-wrap .save-btn:active {
+    transform: scale(0.96);
+}
+
+.textarea-wrap .category-select-btn {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    min-width: 48px;
 }
 
 .link.entry-review {
@@ -1255,20 +1305,60 @@ button {
 }
 
 .category-row {
+    position: relative;
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    gap: 0.35rem;
     width: 100%;
-    flex-wrap: nowrap;
-    align-items: stretch;
 }
 
 .category-row input {
     flex: 1 1 auto;
     min-width: 0;
+    width: 100%;
 }
 
-.category-row .select-wrap {
-    flex: 0 0 48px;
+.category-suggestions {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.65rem;
+    max-height: 240px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: rgba(23,23,38,0.96);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 0.75rem;
+    box-shadow: 0 14px 26px rgba(0,0,0,0.28);
+    z-index: 90;
+}
+
+.category-suggestions[hidden] {
+    display: none !important;
+}
+
+.category-suggestion {
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: #f4f4fb;
+    padding: 0.65rem 0.9rem;
+    border-radius: 0.65rem;
+    font-size: 0.9rem;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.category-suggestion:hover,
+.category-suggestion:focus-visible {
+    background: rgba(255,255,255,0.12);
+    outline: none;
+    transform: translateY(-1px);
 }
 
 .filters {
@@ -1642,8 +1732,8 @@ button {
     align-self: auto;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     display: flex;
+    flex-direction: column;
     gap: 0.75rem;
-    align-items: flex-start;
     position: relative;
 }
 
@@ -1657,7 +1747,6 @@ button {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding-right: 1.5rem;
     width: 100%;
 }
 
@@ -1665,6 +1754,13 @@ button {
     width: 1.1rem;
     height: 1.1rem;
     flex-shrink: 0;
+}
+
+.idea-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
 }
 
 .idea-hide {
@@ -1689,40 +1785,6 @@ button {
 .idea-hide:not(:disabled):focus-visible {
     background: rgba(255,255,255,0.1);
     outline: none;
-}
-
-.idea-pin {
-    position: absolute;
-    top: 0.55rem;
-    right: 0.55rem;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.16);
-    background: rgba(255,255,255,0.05);
-    color: #d7d7f5;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.idea-pin svg {
-    width: 1.1rem;
-    height: 1.1rem;
-}
-
-.idea-pin:hover,
-.idea-pin:focus-visible {
-    background: rgba(255,255,255,0.12);
-    border-color: rgba(255,255,255,0.28);
-    color: #ffca28;
-    outline: none;
-}
-
-.idea-pin:active {
-    transform: translateY(1px);
 }
 
 .idea-pin.is-active {
@@ -1764,14 +1826,62 @@ button {
 .idea-time {
     font-size: 0.7rem;
     color: #999;
+    white-space: nowrap;
 }
 
 .idea-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     margin-top: 0.25rem;
+}
+
+.idea-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.idea-pin,
+.idea-thread {
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.05);
+    color: #d7d7f5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0.45rem;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.idea-pin svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.idea-thread svg {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.idea-pin:hover,
+.idea-pin:focus-visible,
+.idea-thread:hover,
+.idea-thread:focus-visible {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.28);
+    color: #ffca28;
+    outline: none;
+}
+
+.idea-pin:active,
+.idea-thread:active {
+    transform: translateY(1px);
 }
 
 /* Add styles for the category filter */
@@ -2189,6 +2299,11 @@ button.category-pill:focus-visible {
 .category-pill.has-custom-color,
 .category-chip.has-custom-color {
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
+}
+
+.review-layout .card.is-archived .category-chip {
+    filter: saturate(0);
+    opacity: 0.65;
 }
 
 /* New Figma-inspired inline category design */
