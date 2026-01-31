@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - BOT</title>
+    <meta name="theme-color" content="#ffca28">
+    <link rel="manifest" href="/manifest.json">
+    <script src="/sw-register.js" defer></script>
+  <script type="module" crossorigin src="/assets/signin-C-M74KL1.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-Cc9HL3xm.js">
+  <link rel="modulepreload" crossorigin href="/assets/toast-CXqOG0Ji.js">
+  <link rel="stylesheet" crossorigin href="/assets/auth-CdCMvMMq.css">
+  <link rel="stylesheet" crossorigin href="/assets/signin-pAQcHX1q.css">
+</head>
+
+<body>
+    <div class="signin-container">
+        <div class="signin-card">
+            <h1>Sign in to Bucket of Thoughts</h1>
+            <p>Use your Google account to access and sync your notes securely.</p>
+
+            <button type="button" class="btn-primary google-btn" id="googleSignInBtn">
+                Continue with Google
+            </button>
+
+            <div id="statusMessage" class="status-message" hidden></div>
+
+            <div class="help-text">
+                <strong>Migrating from the legacy User ID?</strong><br>
+                Sign in with Google, then follow the migration steps in the Account page to import your existing notes.
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

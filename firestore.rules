@@ -18,12 +18,23 @@ service cloud.firestore {
       allow create: if createsOwnResource(request.resource);
       allow read, delete: if ownsResource(resource);
       allow update: if ownsResource(resource) && request.resource.data.userId == resource.data.userId;
+
+      match /comments/{commentId} {
+        allow create: if createsOwnResource(request.resource);
+        allow read, delete: if ownsResource(resource);
+      }
     }
 
     match /categorySettings/{settingId} {
       allow create: if createsOwnResource(request.resource);
       allow read, delete: if ownsResource(resource);
       allow update: if ownsResource(resource) && request.resource.data.userId == resource.data.userId;
+    }
+
+    match /userSettings/{userId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn() && userId == request.auth.uid;
     }
   }
 }
