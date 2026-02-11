@@ -1,0 +1,564 @@
+/**
+ * Thread Notes Module
+ * X.com-style inline expandable notes for ideas
+ * Supports inline expansion on mobile and detail pane on desktop
+ */
+
+import { subscribeToNotes, addNote, getNoteCount, getNotesFromLocal } from '../lib/storage.js';
+import { escapeHtml, formatTime } from '../lib/utils.js';
+import { showToast } from '../lib/toast.js';
+
+// State per idea: Map<ideaId, { isOpen, notes, unsubscribe, container }>
+const threadStates = new Map();
+
+// Track if module is initialized
+let isInitialized = false;
+
+// Desktop breakpoint (matches CSS)
+const DESKTOP_BREAKPOINT = 1024;
+
+// Detail pane state
+let detailPaneState = {
+    selectedIdeaId: null,
+    detailPane: null,
+    detailContent: null,
+    closeBtn: null,
+    clonedBubble: null
+};
+
+// Icons
+const sendIcon = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+
+/**
+ * Check if we're in desktop mode
+ */
+function isDesktop() {
+    return window.innerWidth >= DESKTOP_BREAKPOINT;
+}
+
+/**
+ * Initialize the thread notes module
+ */
+export function initThreadNotes() {
+    if (isInitialized) return;
+    isInitialized = true;
+
+    // Add global styles if not already present
+    if (!document.getElementById('thread-notes-styles')) {
+        const style = document.createElement('style');
+        style.id = 'thread-notes-styles';
+        style.textContent = getThreadNotesStyles();
+        document.head.appendChild(style);
+    }
+
+    // Setup detail pane references
+    detailPaneState.detailPane = document.getElementById('detailPane');
+    detailPaneState.detailContent = document.getElementById('detailContent');
+    detailPaneState.closeBtn = document.querySelector('.detail-pane__close');
+
+    // Bind close button
+    detailPaneState.closeBtn?.addEventListener('click', closeDetailPane);
+
+    // Handle resize - if switching from desktop to mobile, close detail pane
+    window.addEventListener('resize', () => {
+        if (!isDesktop() && detailPaneState.selectedIdeaId) {
+            closeDetailPane();
+        }
+    });
+}
+
+/**
+ * Attach thread functionality to an idea element
+ * @param {HTMLElement} ideaEl - The idea card element
+ * @param {string} ideaId - The idea ID
+ */
+export function attachThread(ideaEl, ideaId) {
+    if (!ideaEl || !ideaId) return;
+
+    // Check if already attached
+    if (ideaEl.dataset.threadAttached === 'true') return;
+    ideaEl.dataset.threadAttached = 'true';
+
+    // Create the thread container (hidden by default)
+    const threadContainer = document.createElement('div');
+    threadContainer.className = 'thread-notes';
+    threadContainer.dataset.threadContainer = ideaId;
+    threadContainer.innerHTML = `
+        <div class="thread-notes-content" data-thread-content="${ideaId}"></div>
+        <div class="thread-input-row">
+            <textarea 
+                class="thread-input" 
+                placeholder="Add a note..." 
+                rows="1"
+                data-thread-input="${ideaId}"
+            ></textarea>
+            <button 
+                type="button" 
+                class="thread-send-btn" 
+                data-thread-send="${ideaId}"
+                aria-label="Add note"
+            >${sendIcon}</button>
+        </div>
+    `;
+
+    // Find the idea body and append after it
+    const ideaBody = ideaEl.querySelector('.idea-body');
+    if (ideaBody) {
+        ideaBody.after(threadContainer);
+    } else {
+        ideaEl.appendChild(threadContainer);
+    }
+
+    // Initialize state
+    threadStates.set(ideaId, {
+        isOpen: false,
+        notes: getNotesFromLocal(ideaId),
+        unsubscribe: null,
+        container: threadContainer
+    });
+
+    // Update the thread button note count
+    updateNoteCount(ideaEl, ideaId);
+
+    // Bind events
+    bindThreadEvents(ideaEl, ideaId);
+}
+
+/**
+ * Update the note count badge on the thread button
+ */
+function updateNoteCount(ideaEl, ideaId) {
+    const count = getNoteCount(ideaId);
+    const btn = ideaEl.querySelector(`.idea-thread[data-thread-id="${ideaId}"]`);
+    if (btn) {
+        btn.dataset.count = count.toString();
+        btn.title = count > 0 ? `${count} note${count !== 1 ? 's' : ''}` : 'Add notes';
+    }
+}
+
+/**
+ * Bind events for the thread container
+ */
+function bindThreadEvents(ideaEl, ideaId) {
+    const state = threadStates.get(ideaId);
+    if (!state) return;
+
+    const { container } = state;
+    const input = container.querySelector(`[data-thread-input="${ideaId}"]`);
+    const sendBtn = container.querySelector(`[data-thread-send="${ideaId}"]`);
+
+    // Auto-resize textarea
+    input?.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Submit on Enter (without Shift)
+    input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit(ideaEl, ideaId);
+        }
+    });
+
+    // Submit on button click
+    sendBtn?.addEventListener('click', () => {
+        handleSubmit(ideaEl, ideaId);
+    });
+}
+
+/**
+ * Handle note submission
+ */
+async function handleSubmit(ideaEl, ideaId) {
+    const state = threadStates.get(ideaId);
+    if (!state) return;
+
+    const { container } = state;
+    const input = container.querySelector(`[data-thread-input="${ideaId}"]`);
+    const sendBtn = container.querySelector(`[data-thread-send="${ideaId}"]`);
+
+    const text = input?.value?.trim();
+    if (!text) return;
+
+    // Disable while submitting
+    if (input) input.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+        await addNote(ideaId, text);
+
+        // Clear input on success
+        if (input) {
+            input.value = '';
+            input.style.height = 'auto';
+        }
+
+        // Note count will update via subscription
+    } catch (error) {
+        console.error('[ThreadNotes] Failed to add note:', error);
+        showToast('Failed to add note. Please try again.', { tone: 'error' });
+    } finally {
+        if (input) input.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        input?.focus();
+    }
+}
+
+/**
+ * Open/expand a thread inline
+ */
+export function openThread(ideaId) {
+    const state = threadStates.get(ideaId);
+    if (!state || state.isOpen) return;
+
+    state.isOpen = true;
+    state.container.classList.add('is-open');
+
+    // Show loading state
+    const contentEl = state.container.querySelector(`[data-thread-content="${ideaId}"]`);
+    if (contentEl) {
+        contentEl.innerHTML = '<div class="thread-loading">Loading notes...</div>';
+    }
+
+    // Subscribe to notes
+    state.unsubscribe = subscribeToNotes(
+        ideaId,
+        (notes) => {
+            state.notes = notes;
+            renderNotes(ideaId, notes);
+
+            // Update button count
+            const ideaEl = state.container.closest('.idea-bubble, .swipe-item, .idea-row');
+            if (ideaEl) updateNoteCount(ideaEl, ideaId);
+        },
+        (error) => {
+            console.error('[ThreadNotes] Subscription error:', error);
+            if (contentEl) {
+                contentEl.innerHTML = '<div class="thread-error">Unable to load notes</div>';
+            }
+        }
+    );
+
+    // Focus input
+    const input = state.container.querySelector(`[data-thread-input="${ideaId}"]`);
+    setTimeout(() => input?.focus(), 100);
+}
+
+/**
+ * Close/collapse a thread
+ */
+export function closeThread(ideaId) {
+    const state = threadStates.get(ideaId);
+    if (!state || !state.isOpen) return;
+
+    state.isOpen = false;
+    state.container.classList.remove('is-open');
+
+    // Unsubscribe from Firestore
+    if (state.unsubscribe) {
+        state.unsubscribe();
+        state.unsubscribe = null;
+    }
+}
+
+/**
+ * Open thread in the desktop detail pane
+ * @param {string} ideaId - The idea ID
+ * @param {HTMLElement} sourceEl - The source idea element to clone
+ */
+export function openInDetailPane(ideaId, sourceEl) {
+    const { detailPane, detailContent } = detailPaneState;
+    if (!detailPane || !detailContent || !sourceEl) return;
+
+    // Close any existing selection
+    if (detailPaneState.selectedIdeaId && detailPaneState.selectedIdeaId !== ideaId) {
+        closeDetailPane();
+    }
+
+    // Find the idea bubble element
+    const ideaBubble = sourceEl.classList.contains('idea-bubble')
+        ? sourceEl
+        : sourceEl.querySelector('.idea-bubble') || sourceEl;
+
+    // Clone the bubble for the detail pane
+    const clone = ideaBubble.cloneNode(true);
+    clone.classList.remove('is-selected');
+    clone.removeAttribute('data-thread-attached');
+
+    // Clear the detail content and add clone
+    detailContent.innerHTML = '';
+    detailContent.appendChild(clone);
+
+    // Attach thread to the cloned bubble
+    attachThread(clone, ideaId);
+
+    // Open thread immediately in detail pane
+    const state = threadStates.get(ideaId);
+    if (state) {
+        openThread(ideaId);
+    }
+
+    // Mark as selected
+    detailPaneState.selectedIdeaId = ideaId;
+    detailPaneState.clonedBubble = clone;
+    detailPane.classList.add('has-content');
+    detailContent.hidden = false;
+
+    // Add selected highlight to source
+    ideaBubble.classList.add('is-selected');
+    const swipeItem = sourceEl.closest('.swipe-item');
+    if (swipeItem) swipeItem.classList.add('is-selected');
+}
+
+/**
+ * Close the detail pane and deselect
+ */
+export function closeDetailPane() {
+    const { detailPane, detailContent, selectedIdeaId } = detailPaneState;
+    if (!detailPane) return;
+
+    // Close thread subscription in detail pane
+    if (selectedIdeaId) {
+        closeThread(selectedIdeaId);
+    }
+
+    // Remove selected highlight from source
+    document.querySelectorAll('.is-selected').forEach(el => {
+        el.classList.remove('is-selected');
+    });
+
+    // Clear detail pane
+    if (detailContent) {
+        detailContent.innerHTML = '';
+        detailContent.hidden = true;
+    }
+    detailPane.classList.remove('has-content');
+
+    // Reset state
+    detailPaneState.selectedIdeaId = null;
+    detailPaneState.clonedBubble = null;
+}
+
+/**
+ * Toggle thread open/closed
+ * On desktop: Opens in detail pane
+ * On mobile: Expands inline
+ */
+export function toggleThread(ideaId, sourceEl = null) {
+    const state = threadStates.get(ideaId);
+    if (!state) return;
+
+    // On desktop, use detail pane
+    if (isDesktop() && detailPaneState.detailPane) {
+        // Find source element if not provided
+        if (!sourceEl) {
+            sourceEl = document.querySelector(`[data-thread-id="${ideaId}"]`)?.closest('.idea-bubble, .swipe-item, .idea-row');
+        }
+
+        if (detailPaneState.selectedIdeaId === ideaId) {
+            closeDetailPane();
+        } else {
+            openInDetailPane(ideaId, sourceEl);
+        }
+        return;
+    }
+
+    // On mobile, use inline expansion
+    if (state.isOpen) {
+        closeThread(ideaId);
+    } else {
+        openThread(ideaId);
+    }
+}
+
+/**
+ * Render notes in the thread content area
+ */
+function renderNotes(ideaId, notes) {
+    const state = threadStates.get(ideaId);
+    if (!state) return;
+
+    const contentEl = state.container.querySelector(`[data-thread-content="${ideaId}"]`);
+    if (!contentEl) return;
+
+    if (!notes || notes.length === 0) {
+        contentEl.innerHTML = '<div class="thread-empty">No notes yet. Add one below.</div>';
+        return;
+    }
+
+    contentEl.innerHTML = notes.map(note => `
+        <div class="thread-note${note.pending ? ' is-pending' : ''}">
+            <div class="thread-note-text">${escapeHtml(note.text)}</div>
+            <div class="thread-note-meta">${formatTime(note.createdAt)}</div>
+        </div>
+    `).join('');
+
+    // Scroll to bottom
+    contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+/**
+ * Get the inline CSS styles for thread notes
+ */
+function getThreadNotesStyles() {
+    return `
+        /* Inline Thread Notes (X.com style) */
+        .thread-notes {
+            margin-top: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease, padding 0.3s ease;
+            padding: 0;
+        }
+
+        .thread-notes.is-open {
+            max-height: 400px;
+            opacity: 1;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+        }
+
+        .thread-notes-content {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .thread-note {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .thread-note:last-of-type {
+            border-bottom: none;
+        }
+
+        .thread-note.is-pending {
+            opacity: 0.6;
+        }
+
+        .thread-note-text {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #e0e0e5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .thread-note-meta {
+            font-size: 0.7rem;
+            color: #888;
+            margin-top: 0.25rem;
+        }
+
+        .thread-input-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .thread-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 1rem;
+            padding: 0.6rem 1rem;
+            color: inherit;
+            font-family: inherit;
+            font-size: 0.875rem;
+            resize: none;
+            min-height: 38px;
+            max-height: 120px;
+        }
+
+        .thread-input:focus {
+            outline: none;
+            border-color: rgba(255, 202, 40, 0.5);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .thread-input:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .thread-send-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #ffca28;
+            color: #1a1a1a;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+
+        .thread-send-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .thread-send-btn:active {
+            transform: scale(0.95);
+        }
+
+        .thread-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .thread-loading,
+        .thread-empty,
+        .thread-error {
+            font-size: 0.85rem;
+            color: #888;
+            padding: 0.5rem 0;
+            text-align: center;
+        }
+
+        .thread-error {
+            color: #ff6b6b;
+        }
+
+        /* Note count badge on thread button */
+        .idea-thread[data-count]:not([data-count="0"])::after {
+            content: attr(data-count);
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            font-size: 0.55rem;
+            font-weight: 600;
+            background: #ffca28;
+            color: #1a1a1a;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 3px;
+        }
+
+        .idea-thread {
+            position: relative;
+        }
+    `;
+}
+
+/**
+ * Cleanup all thread subscriptions (call on page unload)
+ */
+export function cleanupThreadNotes() {
+    threadStates.forEach((state, ideaId) => {
+        if (state.unsubscribe) {
+            state.unsubscribe();
+        }
+    });
+    threadStates.clear();
+}

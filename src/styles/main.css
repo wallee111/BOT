@@ -179,7 +179,9 @@
 
 .thread-send:active {
     transform: scale(0.95);
-}/* Detail Pane */
+}
+
+/* Detail Pane */
 .detail-pane {
     background: hsl(var(--card));
     border-left: 1px solid hsl(var(--border));
@@ -299,4 +301,19 @@
     gap: 0.5rem;
     flex: 1;
     /* Allow taking available space */
+}
+
+/* Tags */
+.idea-tag {
+    color: var(--bot-brand);
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0 2px;
+    transition: background 0.1s ease;
+}
+
+.idea-tag:hover {
+    background: rgba(255, 202, 40, 0.1);
+    text-decoration: none;
 }

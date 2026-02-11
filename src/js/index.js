@@ -12,7 +12,10 @@ import {
     trackCategoryUsage,
     getCategoriesByRecentUsage,
     getPendingMutationCount,
-    getUserSettings
+    getUserSettings,
+    updateIdeaPriority,
+    deleteIdea,
+    updateIdeaText
 } from '../lib/storage.js';
 import {
     escapeHtml,
@@ -20,12 +23,15 @@ import {
     getCategoryAppearance,
     formatTime,
     HEX_COLOR_PATTERN,
-    normalizeCategories
+    normalizeCategories,
+    extractTags,
+    highlightTags
 } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
-import { ThreadManager } from './thread-ui.js';
+import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
 import { showToast } from '../lib/toast.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
+import { initSwipeGestures, cleanupSwipeGestures, closeSwipeItem } from './idea-bubble.js';
 
 // --- Constants & Config ---
 const TAB_ORDER = ['focus', 'main', 'hidden'];
@@ -49,10 +55,12 @@ const feedPanels = Array.from(document.querySelectorAll('.feed-panel'));
 // Capture Form
 const textInput = $('#text');
 const categorySelect = $('#categorySelect');
+const prioritySelect = $('#prioritySelect');
 const categoryNew = $('#categoryNew');
 const categoryRow = categoryNew?.closest('.category-row');
 const categorySelectWrap = categorySelect?.closest('.select-wrap');
-const categoryIcon = document.querySelector('.select-wrap.icon-only');
+const prioritySelectWrap = prioritySelect?.closest('.select-wrap');
+const categoryIcon = document.querySelector('.select-wrap.icon-only:not(.priority-select)');
 const saveBtn = document.querySelector('.save-btn');
 const captureLayout = document.querySelector('.capture-layout');
 
@@ -76,6 +84,7 @@ const categoryEditDropdownContent = document.getElementById('categoryEditDropdow
 let state = {
     activeTab: 'main',
     focusCategory: '',
+    activeTagFilter: null,
     allIdeas: [],
     availableCategories: [],
     categoryPalette: {},
@@ -107,6 +116,9 @@ async function initialize() {
         return;
     }
 
+    // Initialize thread notes module
+    initThreadNotes();
+
     // Initial load
     const settings = await getUserSettings();
     state.userSettings = settings;
@@ -125,7 +137,10 @@ async function initialize() {
         renderFeeds(ideas);
     });
 
-    window.addEventListener('beforeunload', () => unsubscribe());
+    window.addEventListener('beforeunload', () => {
+        unsubscribe();
+        cleanupThreadNotes();
+    });
 }
 
 // Load focus category from storage
@@ -458,14 +473,34 @@ function renderCategoryChipElements(container, categories) {
     });
 }
 
+// Priority emoji mappings
+const PRIORITY_BADGES = {
+    urgent: '🔴',
+    high: '🟠',
+    medium: '🟡',
+    low: '⚪'
+};
+
+// Priority cycle order: none → urgent → high → medium → low → none
+const PRIORITY_CYCLE = ['', 'urgent', 'high', 'medium', 'low'];
+
 function buildIdeaElement(idea, { hiddenView = false } = {}) {
     const ideaEl = document.createElement('div');
     ideaEl.className = 'idea-bubble';
     if (idea.pinned) ideaEl.classList.add('is-pinned');
+    if (idea.priority) ideaEl.classList.add(`priority-${idea.priority}`);
 
     const createdAt = Number(idea.createdAt) || 0;
     const olderThanDay = (Date.now() - createdAt) > 24 * 60 * 60 * 1000;
     const timeMarkup = olderThanDay ? `${new Date(createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${formatTime(createdAt)}` : formatTime(createdAt);
+
+    // Priority badge - always visible, clickable to cycle
+    const currentPriority = idea.priority || '';
+    const priorityEmoji = PRIORITY_BADGES[currentPriority] || '⚫';
+    const priorityTitle = currentPriority
+        ? `${currentPriority.charAt(0).toUpperCase() + currentPriority.slice(1)} priority - click to change`
+        : 'No priority - click to set';
+    const priorityButton = `<button type="button" class="priority-dot" data-id="${idea.id}" data-priority="${currentPriority}" title="${priorityTitle}" aria-label="${priorityTitle}">${priorityEmoji}</button>`;
 
     const pinIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l3.5 3.5h-2v6l2.5 2.5v1.5l-4-2.3-4 2.3v-1.5L10.5 13V7H8.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>`;
     const threadIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-4.5L12 21l-2.5-3.5H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8.5 9.5h7M8.5 13h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>`;
@@ -477,19 +512,28 @@ function buildIdeaElement(idea, { hiddenView = false } = {}) {
                     <div class="category-chip-list"></div>
                     <button type="button" class="category-add-btn" data-category-add-trigger="${idea.id}" aria-label="Add category" aria-haspopup="dialog"><span aria-hidden="true">+</span></button>
                 </div>
-                <div class="idea-time">${timeMarkup}</div>
+                <div class="idea-meta">
+                    ${priorityButton}
+                    <div class="idea-time">${timeMarkup}</div>
+                </div>
             </div>
-            <p class="idea-text">${escapeHtml(idea.text)}</p>
+            <p class="idea-text">${highlightTags(idea.text)}</p>
             <div class="idea-footer">
                 <div class="idea-actions">
                     ${!hiddenView ? `<button type="button" class="idea-pin${idea.pinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${idea.pinned}" aria-pressed="${idea.pinned}" aria-label="${idea.pinned ? 'Unpin idea' : 'Pin idea'}">${pinIcon}</button>` : ''}
-                    ${!hiddenView ? `<button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Open thread">${threadIcon}</button>` : ''}
+                    ${!hiddenView ? `<button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Toggle notes">${threadIcon}</button>` : ''}
                 </div>
                 <button type="button" class="idea-hide" data-id="${idea.id}" data-action="${hiddenView ? 'unhide' : 'hide'}" aria-label="${hiddenView ? 'Unhide idea' : 'Hide idea'}">${hiddenView ? 'Unhide' : 'Hide'}</button>
             </div>
         </div>`;
 
     renderCategoryChipElements(ideaEl.querySelector('.category-chip-list'), getIdeaCategoriesList(idea));
+
+    // Attach thread notes (inline expandable notes)
+    if (!hiddenView) {
+        attachThread(ideaEl, idea.id);
+    }
+
     return ideaEl;
 }
 
@@ -506,18 +550,84 @@ function renderFeedList(container, list, { hiddenView = false, autoScroll = fals
         return;
     }
 
+    // Mark container for swipe gesture handling
+    container.setAttribute('data-swipe-container', 'true');
+
     list.forEach(idea => {
-        const bubble = buildIdeaElement(idea, { hiddenView });
         const row = document.createElement('div');
         row.className = 'idea-row';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'idea-complete';
-        checkbox.dataset.id = idea.id;
-        checkbox.setAttribute('aria-label', 'Mark idea as completed');
-        row.append(checkbox, bubble);
+        row.dataset.id = idea.id;
+
+        // Add swipe action buttons (revealed on left swipe)
+        if (!hiddenView) {
+            const actions = document.createElement('div');
+            actions.className = 'swipe-actions';
+            actions.innerHTML = `
+                <button type="button" class="swipe-btn swipe-btn--edit" data-edit-idea="${idea.id}" aria-label="Edit idea">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                </button>
+                <button type="button" class="swipe-btn swipe-btn--delete" data-del-idea="${idea.id}" aria-label="Delete idea">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                </button>
+            `;
+            row.appendChild(actions);
+        }
+
+        const bubble = buildIdeaElement(idea, { hiddenView });
+        row.appendChild(bubble);
         container.appendChild(row);
     });
+
+    // Initialize swipe gestures for non-hidden views
+    if (!hiddenView) {
+        initSwipeGestures(container, {
+            onEdit: (row, ideaId) => {
+                openInlineEditor(row, ideaId);
+            },
+            onDelete: async (row, ideaId) => {
+                if (!ideaId) return;
+                if (!confirm('Delete this idea permanently?')) return;
+
+                row.style.opacity = '0.5';
+                row.style.pointerEvents = 'none';
+
+                try {
+                    await deleteIdea(ideaId);
+                    showToast('Idea deleted', { timeout: 2000 });
+                } catch (err) {
+                    console.error('Failed to delete idea:', err);
+                    row.style.opacity = '';
+                    row.style.pointerEvents = '';
+                    showToast('Failed to delete', { tone: 'error' });
+                }
+            },
+            onArchive: async (row) => {
+                const ideaId = row?.dataset?.id;
+                if (!ideaId) return;
+
+                row.style.opacity = '0.5';
+                row.style.pointerEvents = 'none';
+
+                try {
+                    await setIdeaArchived(ideaId, true);
+                    showToast('Idea archived', { timeout: 2000 });
+                } catch (err) {
+                    console.error('Failed to archive idea:', err);
+                    row.style.opacity = '';
+                    row.style.pointerEvents = '';
+                    showToast('Failed to archive', { tone: 'error' });
+                }
+            }
+        });
+    }
 
     const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
     if (autoScroll && isAtBottom) {
@@ -527,16 +637,90 @@ function renderFeedList(container, list, { hiddenView = false, autoScroll = fals
     }
 }
 
-function renderFocusFeed(activeIdeas, pinnedIdea) {
+// Inline editor for main feed
+function openInlineEditor(row, ideaId) {
+    const bubble = row.querySelector('.idea-bubble');
+    if (!bubble) return;
+
+    const textEl = bubble.querySelector('.idea-text');
+    if (!textEl) return;
+
+    const originalText = textEl.textContent;
+
+    // Replace text with textarea
+    const editor = document.createElement('div');
+    editor.className = 'inline-edit';
+    editor.innerHTML = `
+        <textarea class="inline-edit__input" rows="3">${escapeHtml(originalText)}</textarea>
+        <div class="inline-edit__actions">
+            <button type="button" class="inline-edit__save" data-save-idea="${ideaId}">Save</button>
+            <button type="button" class="inline-edit__cancel" data-cancel-edit>Cancel</button>
+        </div>
+    `;
+
+    textEl.hidden = true;
+    textEl.after(editor);
+
+    const textarea = editor.querySelector('textarea');
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    // Handle save
+    editor.querySelector('[data-save-idea]').addEventListener('click', async () => {
+        const newText = textarea.value.trim();
+        if (!newText || newText === originalText) {
+            closeInlineEditor(row);
+            return;
+        }
+
+        try {
+            const tags = extractTags(newText);
+            await updateIdeaText(ideaId, newText, tags);
+            textEl.innerHTML = highlightTags(newText);
+            showToast('Saved', { timeout: 1500 });
+        } catch (err) {
+            console.error('Failed to update idea:', err);
+            showToast('Failed to save', { tone: 'error' });
+        }
+        closeInlineEditor(row);
+    });
+
+    // Handle cancel
+    editor.querySelector('[data-cancel-edit]').addEventListener('click', () => {
+        closeInlineEditor(row);
+    });
+
+    // Handle Escape
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeInlineEditor(row);
+        }
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            editor.querySelector('[data-save-idea]').click();
+        }
+    });
+}
+
+function closeInlineEditor(row) {
+    const bubble = row.querySelector('.idea-bubble');
+    const editor = bubble?.querySelector('.inline-edit');
+    const textEl = bubble?.querySelector('.idea-text');
+
+    if (editor) editor.remove();
+    if (textEl) textEl.hidden = false;
+}
+
+function renderFocusFeed(activeIdeas, pinnedIdeas = []) {
     if (!focusFeed) return;
     if (!state.focusCategory) {
         focusFeed.innerHTML = '<p class="feed-empty">Pick a category to focus.</p>';
         return;
     }
 
-    const pinnedId = pinnedIdea?.id;
+    // Create a set of pinned IDs to filter out
+    const pinnedIds = new Set((pinnedIdeas || []).map(i => i.id));
     const matchList = activeIdeas.filter(idea => {
-        if (pinnedId && idea.id === pinnedId) return false;
+        if (pinnedIds.has(idea.id)) return false;
         const cats = getIdeaCategoriesList(idea).map(c => (c || '').trim().toLowerCase());
         return state.focusCategory === '__uncategorized__' ? cats.length === 0 : cats.includes(state.focusCategory.toLowerCase());
     });
@@ -550,23 +734,30 @@ function renderFocusFeed(activeIdeas, pinnedIdea) {
     renderFeedList(focusFeed, matchList, { hiddenView: false, autoScroll: state.activeTab === 'focus' });
 }
 
-function renderPinnedIdea(idea) {
+function renderPinnedIdeas(pinnedIdeas) {
     if (!pinnedContainer) return;
     pinnedContainer.innerHTML = '';
-    if (!idea || idea.archived || idea.hidden) {
+
+    // Filter out archived/hidden ideas
+    const validPinned = pinnedIdeas.filter(idea => idea && !idea.archived && !idea.hidden);
+
+    if (!validPinned.length) {
         pinnedContainer.hidden = true;
         return;
     }
+
     pinnedContainer.hidden = false;
-    const row = document.createElement('div');
-    row.className = 'idea-row';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'idea-complete';
-    checkbox.dataset.id = idea.id;
-    checkbox.setAttribute('aria-label', 'Mark idea as completed');
-    row.append(checkbox, buildIdeaElement(idea));
-    pinnedContainer.append(row);
+
+    // Sort pinned ideas by when they were pinned (most recent first) or createdAt
+    validPinned.sort((a, b) => (b.pinnedAt || b.createdAt) - (a.pinnedAt || a.createdAt));
+
+    validPinned.forEach(idea => {
+        const row = document.createElement('div');
+        row.className = 'idea-row';
+        row.dataset.id = idea.id;
+        row.appendChild(buildIdeaElement(idea));
+        pinnedContainer.append(row);
+    });
 }
 
 function renderFeeds(ideas) {
@@ -574,16 +765,36 @@ function renderFeeds(ideas) {
     const activePool = ordered.filter(i => !i.archived && !i.hidden);
     computeCategoryUsage(activePool);
 
-    const pinnedIdea = activePool.find(i => i.pinned);
-    renderPinnedIdea(pinnedIdea || null);
-
+    // Get ALL pinned ideas (not just one)
+    const pinnedIdeas = activePool.filter(i => i.pinned);
     const activeIdeasAll = activePool.filter(i => !shouldHideFromActiveFeed(i));
-    const activeIdeas = pinnedIdea ? activeIdeasAll.filter(i => i.id !== pinnedIdea.id) : activeIdeasAll;
+
+    // Filter by tag if active
+    let displayIdeas = activeIdeasAll;
+    let pinnedDisplay = pinnedIdeas;
+
+    if (state.activeTagFilter) {
+        const tagFilter = state.activeTagFilter.toLowerCase();
+        const hasTag = (idea) => (idea.tags || []).some(t => t.toLowerCase() === tagFilter);
+
+        displayIdeas = activeIdeasAll.filter(hasTag);
+        pinnedDisplay = pinnedIdeas.filter(hasTag);
+
+        // Show indicator that we are filtered
+        showSyncStatusToast(`Filtered by #${state.activeTagFilter} (Click to clear)`, 'info');
+    }
+
+    // Filter out ALL pinned ideas from main feed
+    const pinnedDisplayIds = new Set(pinnedDisplay.map(i => i.id));
+    const activeIdeas = displayIdeas.filter(i => !pinnedDisplayIds.has(i.id));
     const hiddenIdeas = ordered.filter(i => !i.archived && i.hidden);
 
-    renderFocusFeed(ordered.filter(i => !i.archived), pinnedIdea);
-    renderFeedList(mainFeed, activeIdeas, { hiddenView: false, autoScroll: state.activeTab === 'main', suppressEmpty: !!pinnedIdea });
+    renderFocusFeed(ordered.filter(i => !i.archived), pinnedDisplay);
+    renderFeedList(mainFeed, activeIdeas, { hiddenView: false, autoScroll: state.activeTab === 'main', suppressEmpty: pinnedDisplay.length > 0 });
     renderFeedList(hiddenFeed, hiddenIdeas, { hiddenView: true, autoScroll: state.activeTab === 'hidden' });
+
+    // Update pinned container visibility
+    renderPinnedIdeas(pinnedDisplay);
 }
 
 // --- Sync & Storage Calls ---
@@ -623,37 +834,90 @@ function setFocusCategory(value) {
     renderFeeds(state.allIdeas);
 }
 
-function populateFocusCategoryMenu() {
+function populateFocusCategoryMenu(filterQuery = '') {
     if (!focusCategoryMenu) return;
     focusCategoryMenu.innerHTML = '';
+
+    // Add search input
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'focus-menu-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.id = 'focusCategorySearch';
+    searchInput.className = 'focus-menu-search__input';
+    searchInput.placeholder = 'Search categories...';
+    searchInput.autocomplete = 'off';
+    searchInput.value = filterQuery;
+    searchWrap.appendChild(searchInput);
+    focusCategoryMenu.appendChild(searchWrap);
+
+    // Handle search input
+    searchInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        populateFocusCategoryMenu(e.target.value);
+        // Keep focus on the input after repopulating
+        const newInput = focusCategoryMenu.querySelector('#focusCategorySearch');
+        if (newInput) {
+            newInput.focus();
+            newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+        }
+    });
+
+    // Prevent clicks on search from closing menu
+    searchWrap.addEventListener('click', (e) => e.stopPropagation());
+
     const sorted = state.availableCategories.slice().sort((a, b) => CATEGORY_COLLATOR.compare(a, b));
     const options = ['__uncategorized__', ...sorted];
 
-    if (!options.length) {
-        focusCategoryMenu.innerHTML = '<p class="focus-menu-empty">No categories yet.</p>';
+    // Filter based on search query
+    const query = filterQuery.trim().toLowerCase();
+    const filtered = query
+        ? options.filter(opt => {
+            const label = opt === '__uncategorized__' ? 'uncategorized' : opt.toLowerCase();
+            return label.includes(query);
+        })
+        : options;
+
+    if (!filtered.length) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.className = 'focus-menu-empty';
+        emptyMsg.textContent = query ? 'No matching categories.' : 'No categories yet.';
+        focusCategoryMenu.appendChild(emptyMsg);
         return;
     }
 
-    options.forEach(opt => {
+    // Options container for scrolling
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'focus-menu-options';
+
+    filtered.forEach(opt => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'focus-category-option';
         btn.dataset.focusCategory = opt;
         btn.textContent = opt === '__uncategorized__' ? 'Uncategorized' : opt;
         if (opt === state.focusCategory) btn.classList.add('is-selected');
-        focusCategoryMenu.appendChild(btn);
+        optionsContainer.appendChild(btn);
     });
+
+    focusCategoryMenu.appendChild(optionsContainer);
 }
 
 function openFocusCategoryMenu() {
     if (!focusCategoryMenu || !focusCategoryToggle) return;
-    populateFocusCategoryMenu();
+    populateFocusCategoryMenu(''); // Start with empty search
     const rect = focusCategoryToggle.getBoundingClientRect();
     focusCategoryMenu.style.top = `${rect.bottom + 8}px`;
     focusCategoryMenu.style.left = `${rect.left}px`;
     focusCategoryMenu.style.width = `${Math.max(200, rect.width)}px`;
     focusCategoryMenu.hidden = false;
     focusCategoryToggle.setAttribute('aria-expanded', 'true');
+
+    // Focus the search input
+    requestAnimationFrame(() => {
+        const searchInput = focusCategoryMenu.querySelector('#focusCategorySearch');
+        if (searchInput) searchInput.focus();
+    });
 }
 
 function closeFocusCategoryMenu() {
@@ -721,11 +985,15 @@ const handlers = {
         }
 
         const categories = cat ? [cat] : [];
+        const priority = prioritySelect?.value || '';
+        const tags = extractTags(text);
         const idea = {
             id: (window.crypto?.randomUUID?.()) || `idea-${Date.now()}-${Math.random().toString(16).slice(2)}`,
             text,
             category: categories[0] || '',
             categories,
+            tags,
+            priority,
             createdAt: Date.now()
         };
 
@@ -734,7 +1002,9 @@ const handlers = {
             if (idea.category) trackCategoryUsage(idea.category);
             const manualVal = categoryNew.value.trim();
             textInput.value = '';
+            textInput.style.height = 'auto'; // Reset textarea height
             categoryNew.value = '';
+            if (prioritySelect) prioritySelect.value = ''; // Reset priority
             await Promise.all([loadExistingIdeas({ force: true }), updateCategoryList(manualVal || idea.category), refreshCategoryPalette()]);
             refreshCategoryIndicator();
             showToast('Saved!', { tone: 'success', timeout: 1200 });
@@ -776,6 +1046,38 @@ const handlers = {
             return;
         }
 
+        // Priority dot click - cycle through priorities
+        const priorityDot = target.closest('.priority-dot');
+        if (priorityDot) {
+            const id = priorityDot.dataset.id;
+            const currentPriority = priorityDot.dataset.priority || '';
+            const currentIndex = PRIORITY_CYCLE.indexOf(currentPriority);
+            const nextIndex = (currentIndex + 1) % PRIORITY_CYCLE.length;
+            const nextPriority = PRIORITY_CYCLE[nextIndex];
+
+            priorityDot.disabled = true;
+            try {
+                await updateIdeaPriority(id, nextPriority);
+                // Update UI immediately
+                priorityDot.textContent = PRIORITY_BADGES[nextPriority] || '⚫';
+                priorityDot.dataset.priority = nextPriority;
+                const priorityTitle = nextPriority
+                    ? `${nextPriority.charAt(0).toUpperCase() + nextPriority.slice(1)} priority - click to change`
+                    : 'No priority - click to set';
+                priorityDot.title = priorityTitle;
+                priorityDot.setAttribute('aria-label', priorityTitle);
+                // Update bubble class for border color
+                const bubble = priorityDot.closest('.idea-bubble');
+                if (bubble) {
+                    PRIORITY_CYCLE.forEach(p => bubble.classList.remove(`priority-${p}`));
+                    if (nextPriority) bubble.classList.add(`priority-${nextPriority}`);
+                }
+                showToast(nextPriority ? `Priority: ${nextPriority}` : 'Priority cleared', { timeout: 1000 });
+            } catch (e) { console.error('Unable to update priority', e); }
+            finally { priorityDot.disabled = false; }
+            return;
+        }
+
         // Category clicks
         const chip = target.closest('[data-category-chip]');
         if (chip) {
@@ -785,6 +1087,22 @@ const handlers = {
         const addTrig = target.closest('[data-category-add-trigger]');
         if (addTrig) {
             categoryDropdown.open(addTrig.dataset.categoryAddTrigger, addTrig, { mode: 'multi' });
+            return;
+        }
+
+        // Tag clicks
+        const tagEl = target.closest('.idea-tag');
+        if (tagEl) {
+            const tag = tagEl.dataset.tag;
+            if (state.activeTagFilter === tag) {
+                state.activeTagFilter = null;
+                showToast('Filter cleared');
+            } else {
+                state.activeTagFilter = tag;
+                showToast(`Filtered by #${tag}`);
+            }
+            renderFeeds(state.allIdeas);
+            return;
         }
     },
 
@@ -881,9 +1199,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 $('#ideaForm').addEventListener('submit', handlers.handleIdeaSave);
-textInput.addEventListener('input', toggleSaveButton);
+// Auto-resize textarea based on content
+function autoResizeTextarea() {
+    if (!textInput) return;
+    // Reset height to auto to get correct scrollHeight
+    textInput.style.height = 'auto';
+    // Set new height based on content (min 60px, max 200px)
+    const newHeight = Math.min(Math.max(textInput.scrollHeight, 60), 200);
+    textInput.style.height = `${newHeight}px`;
+}
+
+textInput.addEventListener('input', () => {
+    toggleSaveButton();
+    autoResizeTextarea();
+});
 textInput.addEventListener('change', toggleSaveButton);
 toggleSaveButton(); // Init state
+autoResizeTextarea(); // Init textarea size
 
 categorySelect.addEventListener('change', () => {
     if (categorySelect.value) categoryNew.value = '';
@@ -970,89 +1302,107 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('categoryDeleted', () => Promise.all([updateCategoryList(), loadExistingIdeas({ force: true }), refreshCategoryPalette({ force: true })]));
 window.addEventListener('categoryPaletteUpdated', () => refreshCategoryPalette({ force: true }));
 
-// Thread UI Integration
-const overlayThreadManager = new ThreadManager({ mode: 'overlay' });
-const detailThreadManager = new ThreadManager({ mode: 'embedded' });
-
-// Detail Pane Logic
-async function openDetailView(ideaId) {
-    const idea = state.allIdeas.find(i => i.id === ideaId);
-    if (!idea) return;
-
-    const detailPane = document.getElementById('detailContent');
-    const emptyState = document.querySelector('.detail-pane-empty');
-    if (!detailPane || !emptyState) return;
-
-    // Show detail pane, hide empty state
-    detailPane.hidden = false;
-    emptyState.hidden = true;
-
-    // Render Idea Details
-    const createdAt = Number(idea.createdAt) || 0;
-    const timeFull = new Date(createdAt).toLocaleString(undefined, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric'
-    });
-
-    // Create container structure
-    detailPane.innerHTML = `
-        <div class="detail-header">
-            <div class="detail-categories"></div>
-            <div class="detail-info-group">
-                <div class="detail-meta">${escapeHtml(timeFull)}</div>
-                <div class="detail-actions">
-                    ${idea.pinned ? '<span class="detail-badge is-pinned">Pinned</span>' : ''}
-                    ${idea.archived ? '<span class="detail-badge is-archived">Archived</span>' : ''}
-                </div>
-            </div>
-        </div>
-        <div class="detail-body">
-            <p class="detail-text">${escapeHtml(idea.text)}</p>
-        </div>
-        <div class="detail-comments" id="detailComments"></div>
-    `;
-
-    // Render Categories
-    const catContainer = detailPane.querySelector('.detail-categories');
-    renderCategoryChipElements(catContainer, getIdeaCategoriesList(idea));
-
-    // Mount Embedded Thread
-    const commentsContainer = detailPane.querySelector('#detailComments');
-    if (commentsContainer) {
-        detailThreadManager.mount(commentsContainer, ideaId);
-    }
-
-    // Highlight selected idea in feed
-    document.querySelectorAll('.idea-bubble.is-selected').forEach(el => el.classList.remove('is-selected'));
-    document.querySelectorAll(`.idea-row [data-id="${idea.id}"]`).forEach(cb => {
-        const bubble = cb.closest('.idea-row')?.querySelector('.idea-bubble');
-        if (bubble) bubble.classList.add('is-selected');
-    });
-}
-
+// Thread click handler - toggle inline expansion / detail pane
 document.addEventListener('click', (e) => {
-    // 1. Thread Icon Click (Overlay Fallback / Mobile)
+    // 1. Thread Icon Click - Toggle thread
     const trigger = e.target.closest('.idea-thread');
     if (trigger && trigger.dataset.threadId) {
         e.stopPropagation();
-        overlayThreadManager.open(trigger.dataset.threadId);
+        const ideaEl = trigger.closest('.idea-bubble, .idea-row');
+        toggleThread(trigger.dataset.threadId, ideaEl);
         return;
     }
 
-    // 2. Idea Bubble Interaction (Select for Detail View)
-    // Ignore clicks on buttons, inputs, etc. inside the bubble
-    if (e.target.closest('button, input, a, label, .category-chip')) return;
+    // 2. Idea Bubble Click (on desktop) - Open in detail pane
+    // Check if on desktop AND clicking within an idea bubble
+    if (window.innerWidth < 1024) return;
 
     const ideaBubble = e.target.closest('.idea-bubble');
-    if (ideaBubble) {
-        const row = ideaBubble.closest('.idea-row');
-        const id = row?.querySelector('.idea-complete')?.dataset.id;
-        if (id) {
-            openDetailView(id);
+    if (!ideaBubble) return;
+
+    // Don't trigger on buttons, interactive elements, or inline editors
+    const interactiveElement = e.target.closest('button, a, input, textarea, select, .category-chip, .inline-edit, .swipe-btn');
+    if (interactiveElement) return;
+
+    // Find the thread button for this idea
+    const threadBtn = ideaBubble.querySelector('.idea-thread');
+    if (threadBtn && threadBtn.dataset.threadId) {
+        toggleThread(threadBtn.dataset.threadId, ideaBubble);
+    }
+});
+
+// --- Keyboard Shortcuts ---
+document.addEventListener('keydown', (e) => {
+    const isMeta = e.metaKey || e.ctrlKey;
+    const target = e.target;
+    const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+
+    // Cmd/Ctrl + Enter - Save idea (works from textarea)
+    if (isMeta && e.key === 'Enter' && textInput && document.activeElement === textInput) {
+        e.preventDefault();
+        document.querySelector('#ideaForm')?.requestSubmit();
+        return;
+    }
+
+    // Cmd/Ctrl + K - Focus category dropdown
+    if (isMeta && e.key === 'k') {
+        e.preventDefault();
+        categorySelect?.focus();
+        return;
+    }
+
+    // Cmd/Ctrl + P - Focus priority dropdown
+    if (isMeta && e.key === 'p' && !e.shiftKey) {
+        e.preventDefault();
+        prioritySelect?.focus();
+        return;
+    }
+
+    // Cmd/Ctrl + N - Focus capture textarea (new idea)
+    if (isMeta && e.key === 'n') {
+        e.preventDefault();
+        textInput?.focus();
+        return;
+    }
+
+    // Escape - Clear input or close menus
+    if (e.key === 'Escape') {
+        // Close focus category menu first
+        if (focusCategoryMenu && !focusCategoryMenu.hidden) {
+            closeFocusCategoryMenu();
+            return;
+        }
+        // Close category dropdown
+        if (!categoryEditDropdown?.hidden) {
+            categoryDropdown.close();
+            return;
+        }
+        // Clear textarea if focused
+        if (document.activeElement === textInput) {
+            if (textInput.value.trim()) {
+                textInput.value = '';
+                textInput.style.height = 'auto';
+                toggleSaveButton();
+            } else {
+                textInput.blur();
+            }
+            return;
+        }
+    }
+
+    // Number keys 1-3 for tab switching (only when not in input)
+    if (!isInputFocused && !isMeta && !e.shiftKey && !e.altKey) {
+        if (e.key === '1') {
+            setActiveTab('focus');
+            return;
+        }
+        if (e.key === '2') {
+            setActiveTab('main');
+            return;
+        }
+        if (e.key === '3') {
+            setActiveTab('hidden');
+            return;
         }
     }
 });

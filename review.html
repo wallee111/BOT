@@ -51,6 +51,12 @@
                         </div>
                     </div>
                 </div>
+                <div class="select-wrap filter-select filter-select--sort">
+                    <select id="sortBy" aria-label="Sort by">
+                        <option value="date">Most recent</option>
+                        <option value="priority">Priority (high → low)</option>
+                    </select>
+                </div>
             </div>
             <select id="cat" multiple hidden></select>
             <ul id="list" class="list"></ul>
@@ -59,6 +65,22 @@
                 <div id="categoryEditDropdownContent" class="category-edit-dropdown__content"></div>
             </div>
         </div>
+
+        <!-- Desktop Detail Pane -->
+        <aside class="detail-pane" id="detailPane">
+            <button type="button" class="detail-pane__close" aria-label="Close detail pane">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="6" x2="18" y2="18" stroke-width="2" stroke-linecap="round" />
+                    <line x1="18" y1="6" x2="6" y2="18" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+            <div class="detail-pane-empty">
+                <p>Select an idea to view details and notes.</p>
+            </div>
+            <div id="detailContent" class="detail-content" hidden>
+                <!-- Dynamically populated when an idea is selected -->
+            </div>
+        </aside>
     </main>
 
     <!-- Category Add Modal -->

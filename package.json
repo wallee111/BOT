@@ -7,7 +7,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.22",
+    "autoprefixer": "^10.4.24",
     "firebase-admin": "^12.5.0",
     "glob": "^13.0.0",
     "postcss": "^8.5.6",

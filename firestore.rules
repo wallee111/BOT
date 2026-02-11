@@ -19,9 +19,15 @@ service cloud.firestore {
       allow read, delete: if ownsResource(resource);
       allow update: if ownsResource(resource) && request.resource.data.userId == resource.data.userId;
 
+      // Thread notes (comments) - user who owns the parent idea can manage all notes
       match /comments/{commentId} {
-        allow create: if createsOwnResource(request.resource);
-        allow read, delete: if ownsResource(resource);
+        // Check if user owns the PARENT idea
+        function ownsParentIdea() {
+          return isSignedIn() && 
+            get(/databases/$(database)/documents/ideas/$(ideaId)).data.userId == request.auth.uid;
+        }
+        
+        allow read, write: if ownsParentIdea();
       }
     }
 

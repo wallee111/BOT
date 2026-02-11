@@ -152,9 +152,15 @@ const mutationExecutors = {
         if (!id) return;
         await deleteDoc(doc(ideasCollection, id));
     },
-    updateIdeaText: async ({ id, text = '' }) => {
+    updateIdeaText: async ({ id, text = '', tags }) => {
         if (!id) return;
-        await updateDoc(doc(ideasCollection, id), { text });
+        const payload = { text };
+        if (Array.isArray(tags)) payload.tags = tags;
+        await updateDoc(doc(ideasCollection, id), payload);
+    },
+    updateIdeaPriority: async ({ id, priority = '' }) => {
+        if (!id) return;
+        await updateDoc(doc(ideasCollection, id), { priority });
     },
     updateUserSettings: async ({ userId, settings = {} }) => {
         if (!userId) return;
@@ -332,6 +338,8 @@ function normalizeIdeaObject(source = {}, fallbackId) {
         text: data.text ?? '',
         category: categories[0] || '',
         categories,
+        tags: Array.isArray(data.tags) ? data.tags : [],
+        priority: data.priority || '',
         createdAt,
         archived: Boolean(data.archived),
         hidden: Boolean(data.hidden),
@@ -1053,7 +1061,7 @@ export async function getCategories() {
     return Array.from(collected);
 }
 
-export async function updateIdeaText(id, text = '') {
+export async function updateIdeaText(id, text = '', tags) {
     const targetId = (id || '').trim();
     if (!targetId) {
         return false;
@@ -1066,13 +1074,45 @@ export async function updateIdeaText(id, text = '') {
 
     const applyLocal = () => {
         updateIdeasCache(existing => existing.map(idea =>
-            idea.id === targetId ? { ...idea, text: newText } : idea
+            idea.id === targetId ? { ...idea, text: newText, ...(tags ? { tags } : {}) } : idea
+        ));
+    };
+
+    const payload = { id: targetId, text: newText };
+    if (Array.isArray(tags)) {
+        payload.tags = tags;
+    }
+
+    await runMutation({
+        type: 'updateIdeaText',
+        payload,
+        userId,
+        applyLocal
+    });
+
+    return true;
+}
+
+export async function updateIdeaPriority(id, priority = '') {
+    const targetId = (id || '').trim();
+    if (!targetId) {
+        return false;
+    }
+    const newPriority = (priority || '').trim();
+    const userId = await getCurrentUserId();
+    if (!userId) {
+        throw new Error('User must be authenticated to update ideas');
+    }
+
+    const applyLocal = () => {
+        updateIdeasCache(existing => existing.map(idea =>
+            idea.id === targetId ? { ...idea, priority: newPriority } : idea
         ));
     };
 
     await runMutation({
-        type: 'updateIdeaText',
-        payload: { id: targetId, text: newText },
+        type: 'updateIdeaPriority',
+        payload: { id: targetId, priority: newPriority },
         userId,
         applyLocal
     });
@@ -1107,35 +1147,129 @@ export function getCategoriesByRecentUsage(categories) {
     }
 }
 
-export async function addComment(ideaId, text) {
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated");
+// --- Thread Notes (Comments) ---
 
-    // Optimistic / Simple write
-    // We store comments in a subcollection
-    const coll = collection(db, 'ideas', ideaId, 'comments');
-    await addDoc(coll, {
-        text,
-        userId,
-        createdAt: Date.now()
-    });
+const LOCAL_NOTES_CACHE_KEY = 'thread_notes_cache_v1';
+
+function readNotesCache() {
+    try {
+        const raw = localStorage.getItem(LOCAL_NOTES_CACHE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+        console.warn('[Notes] Unable to read notes cache', error);
+        return {};
+    }
 }
 
-export function subscribeToComments(ideaId, callback) {
+function writeNotesCache(cache) {
+    try {
+        localStorage.setItem(LOCAL_NOTES_CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+        console.warn('[Notes] Unable to write notes cache', error);
+    }
+}
+
+export function getNotesFromLocal(ideaId) {
+    if (!ideaId) return [];
+    const cache = readNotesCache();
+    return cache[ideaId] || [];
+}
+
+function writeNotesToLocal(ideaId, notes) {
+    if (!ideaId) return;
+    const cache = readNotesCache();
+    cache[ideaId] = notes;
+    writeNotesCache(cache);
+}
+
+export function getNoteCount(ideaId) {
+    return getNotesFromLocal(ideaId).length;
+}
+
+export async function addNote(ideaId, text) {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("User not authenticated");
+    if (!ideaId) throw new Error("Idea ID is required");
+    if (!text?.trim()) throw new Error("Note text is required");
+
+    const noteData = {
+        text: text.trim(),
+        userId,
+        createdAt: Date.now()
+    };
+
+    // Optimistic UI: Add to local cache immediately
+    const localId = generateLocalId('note');
+    const optimisticNote = { id: localId, ...noteData, pending: true };
+    const currentNotes = getNotesFromLocal(ideaId);
+    writeNotesToLocal(ideaId, [...currentNotes, optimisticNote]);
+
+    try {
+        // Write to Firestore
+        const coll = collection(db, 'ideas', ideaId, 'comments');
+        const docRef = await addDoc(coll, noteData);
+
+        // Update local cache with real ID
+        const updatedNotes = getNotesFromLocal(ideaId).map(note =>
+            note.id === localId ? { ...note, id: docRef.id, pending: false } : note
+        );
+        writeNotesToLocal(ideaId, updatedNotes);
+
+        return { id: docRef.id, ...noteData };
+    } catch (error) {
+        console.error('[Notes] Failed to add note:', error);
+
+        // Remove optimistic note on failure
+        const revertedNotes = getNotesFromLocal(ideaId).filter(note => note.id !== localId);
+        writeNotesToLocal(ideaId, revertedNotes);
+
+        throw error;
+    }
+}
+
+// Legacy alias for backwards compatibility
+export const addComment = addNote;
+
+export function subscribeToNotes(ideaId, callback, onError) {
     // Return a no-op unsubscribe if no ideaId
     if (!ideaId) return () => { };
+
+    // Immediately return cached notes while loading from Firestore
+    const cachedNotes = getNotesFromLocal(ideaId);
+    if (cachedNotes.length > 0) {
+        callback(cachedNotes);
+    }
 
     const coll = collection(db, 'ideas', ideaId, 'comments');
     const q = query(coll, orderBy('createdAt', 'asc'));
 
     return onSnapshot(q, (snapshot) => {
-        const comments = snapshot.docs.map(doc => ({
+        const notes = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
-        callback(comments);
+
+        // Update local cache
+        writeNotesToLocal(ideaId, notes);
+
+        callback(notes);
+    }, (error) => {
+        console.error('[Notes] Subscription error:', error);
+
+        // On error, return cached data if available
+        const fallbackNotes = getNotesFromLocal(ideaId);
+        if (fallbackNotes.length > 0) {
+            callback(fallbackNotes);
+        }
+
+        if (onError) {
+            onError(error);
+        }
     });
 }
+
+// Legacy alias for backwards compatibility
+export const subscribeToComments = subscribeToNotes;
 
 /**
  * User Settings

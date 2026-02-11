@@ -8,12 +8,23 @@ import {
     setIdeaCategories,
     getCategoryPalette,
     setIdeaArchived,
-    updateIdeaText
+    updateIdeaText,
+    updateIdeaPriority
 } from '../lib/storage.js';
 import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
-import { ThreadManager } from './thread-ui.js';
+import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
+import { showToast } from '../lib/toast.js';
+
+// Priority constants
+const PRIORITY_BADGES = {
+    urgent: '🔴',
+    high: '🟠',
+    medium: '🟡',
+    low: '⚪'
+};
+const PRIORITY_CYCLE = ['', 'urgent', 'high', 'medium', 'low'];
 
 const $ = s => document.querySelector(s);
 const list = $('#list');
@@ -41,6 +52,9 @@ const categoryModalClose = categoryAddModal?.querySelector('.category-modal__clo
 const categoryModalOverlay = categoryAddModal?.querySelector('.category-modal__overlay');
 const categoryEditDropdown = document.getElementById('categoryEditDropdown');
 const categoryEditDropdownContent = document.getElementById('categoryEditDropdownContent');
+const sortBy = document.getElementById('sortBy');
+const SORT_STORAGE_KEY = 'review_sort_preference_v1';
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3, '': 4 };
 let categoryOptions = [];
 let categoryPalette = {};
 
@@ -145,7 +159,28 @@ function setCategoryFilterSelections(values = []) {
     render();
 }
 
+/**
+ * Sort ideas based on the current sort preference
+ * @param {Array} ideas - Array of ideas to sort
+ * @returns {Array} - Sorted ideas
+ */
+function sortIdeas(ideas) {
+    const sortMode = sortBy?.value || 'date';
 
+    return ideas.slice().sort((a, b) => {
+        if (sortMode === 'priority') {
+            // Sort by priority (urgent first), then by date (newest first)
+            const priorityA = PRIORITY_ORDER[a.priority || ''] ?? 4;
+            const priorityB = PRIORITY_ORDER[b.priority || ''] ?? 4;
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            return b.createdAt - a.createdAt;
+        }
+        // Default: sort by date (newest first)
+        return b.createdAt - a.createdAt;
+    });
+}
 
 function renderCategoryChipElements(container, categories) {
     if (!container) return;
@@ -347,34 +382,35 @@ function render() {
         return;
     }
 
-    const ideas = ideasCache
-        .slice()
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .filter(idea => {
-            const textMatch = !term || idea.text.toLowerCase().includes(term);
-            if (!textMatch) {
-                return false;
-            }
+    // Filter first, then sort
+    const filteredIdeas = ideasCache.filter(idea => {
+        const textMatch = !term || idea.text.toLowerCase().includes(term);
+        if (!textMatch) {
+            return false;
+        }
 
-            const categories = getIdeaCategories(idea).map(catName => catName.toLowerCase());
-            let categoryMatch = true;
-            if (categoryFilters.length || includeUncategorized) {
-                categoryMatch = false;
-                if (categoryFilters.length && categories.some(catName => categoryFilters.includes(catName))) {
-                    categoryMatch = true;
-                }
-                if (!categoryMatch && includeUncategorized && categories.length === 0) {
-                    categoryMatch = true;
-                }
+        const categories = getIdeaCategories(idea).map(catName => catName.toLowerCase());
+        let categoryMatch = true;
+        if (categoryFilters.length || includeUncategorized) {
+            categoryMatch = false;
+            if (categoryFilters.length && categories.some(catName => categoryFilters.includes(catName))) {
+                categoryMatch = true;
             }
-            if (!categoryMatch) {
-                return false;
+            if (!categoryMatch && includeUncategorized && categories.length === 0) {
+                categoryMatch = true;
             }
+        }
+        if (!categoryMatch) {
+            return false;
+        }
 
-            const statusMatch = statusFilter === 'all' ||
-                (statusFilter === 'archived' ? idea.archived : !idea.archived);
-            return statusMatch;
-        });
+        const statusMatch = statusFilter === 'all' ||
+            (statusFilter === 'archived' ? idea.archived : !idea.archived);
+        return statusMatch;
+    });
+
+    // Apply current sort preference
+    const ideas = sortIdeas(filteredIdeas);
 
     list.innerHTML = '';
     swipeState.openItem = null;
@@ -483,12 +519,20 @@ function resetSwipeState() {
 function openInlineEditor(item) {
     if (!item) return;
     const panel = item.querySelector('.inline-edit');
+    const preview = item.querySelector('.idea-text-preview');
     if (!panel) return;
     const textarea = panel.querySelector('.inline-edit__input');
+
     panel.hidden = false;
+    if (preview) preview.hidden = true;
+
     item.classList.add('is-editing');
     if (textarea) {
         textarea.value = item.dataset.text || '';
+        // Auto-resize textarea to fit content
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight + 10) + 'px';
+
         requestAnimationFrame(() => {
             textarea.focus();
             textarea.setSelectionRange(textarea.value.length, textarea.value.length);
@@ -499,8 +543,13 @@ function openInlineEditor(item) {
 function closeInlineEditor(item) {
     if (!item) return;
     const panel = item.querySelector('.inline-edit');
+    const preview = item.querySelector('.idea-text-preview');
+
     if (panel) {
         panel.hidden = true;
+    }
+    if (preview) {
+        preview.hidden = false;
     }
     item.classList.remove('is-editing');
 }
@@ -540,12 +589,65 @@ list.addEventListener('click', async e => {
         categoryDropdown.open(ideaId, addTrigger, { mode: 'multi' });
         return;
     }
+
+    // Handle priority dot clicks - cycle through priorities
+    const priorityDot = e.target.closest('.priority-dot');
+    if (priorityDot) {
+        const id = priorityDot.dataset.id;
+        const currentPriority = priorityDot.dataset.priority || '';
+        const currentIndex = PRIORITY_CYCLE.indexOf(currentPriority);
+        const nextIndex = (currentIndex + 1) % PRIORITY_CYCLE.length;
+        const nextPriority = PRIORITY_CYCLE[nextIndex];
+
+        priorityDot.disabled = true;
+        try {
+            await updateIdeaPriority(id, nextPriority);
+            // Update UI immediately
+            priorityDot.textContent = PRIORITY_BADGES[nextPriority] || '⚫';
+            priorityDot.dataset.priority = nextPriority;
+            const priorityTitle = nextPriority
+                ? `${nextPriority.charAt(0).toUpperCase() + nextPriority.slice(1)} priority - click to change`
+                : 'No priority - click to set';
+            priorityDot.title = priorityTitle;
+            priorityDot.setAttribute('aria-label', priorityTitle);
+            showToast(nextPriority ? `Priority: ${nextPriority}` : 'Priority cleared', { timeout: 1000 });
+        } catch (err) {
+            console.error('Unable to update priority', err);
+        } finally {
+            priorityDot.disabled = false;
+        }
+        return;
+    }
 });
 
 // Modal category option selection removed - now using checkboxes with auto-save on close
 
 // List click handlers for other actions
 list.addEventListener('click', async e => {
+    // Thread button click - toggle inline notes / detail pane
+    const threadBtn = e.target.closest('.idea-thread');
+    if (threadBtn && threadBtn.dataset.threadId) {
+        e.stopPropagation();
+        const swipeItem = threadBtn.closest('.swipe-item');
+        toggleThread(threadBtn.dataset.threadId, swipeItem);
+        return;
+    }
+
+    // Swipe item content click (on desktop) - Open in detail pane
+    const swipeContent = e.target.closest('.swipe-item__content');
+    if (swipeContent && window.innerWidth >= 1024) {
+        // Don't trigger on buttons or interactive elements
+        if (e.target.closest('button, a, input, textarea, select, .category-chip')) {
+            return;
+        }
+        const swipeItem = swipeContent.closest('.swipe-item');
+        const threadBtn = swipeItem?.querySelector('.idea-thread');
+        if (threadBtn && threadBtn.dataset.threadId) {
+            e.stopPropagation();
+            toggleThread(threadBtn.dataset.threadId, swipeItem);
+            return;
+        }
+    }
 
     const editBtn = e.target.closest('[data-edit-idea]');
     if (editBtn) {
@@ -743,6 +845,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'signin.html';
         return;
     }
+
+    // Initialize thread notes module
+    initThreadNotes();
+
     try {
         // Restore category filter selection
         try {
@@ -844,6 +950,36 @@ function createIdeaListItem(idea) {
     time.style.color = 'var(--muted-foreground)';
     time.style.whiteSpace = 'nowrap';
 
+    // Priority dot button
+    const currentPriority = idea.priority || '';
+    const priorityEmoji = PRIORITY_BADGES[currentPriority] || '⚫';
+    const priorityTitle = currentPriority
+        ? `${currentPriority.charAt(0).toUpperCase() + currentPriority.slice(1)} priority - click to change`
+        : 'No priority - click to set';
+    const priorityDot = document.createElement('button');
+    priorityDot.type = 'button';
+    priorityDot.className = 'priority-dot';
+    priorityDot.dataset.id = idea.id;
+    priorityDot.dataset.priority = currentPriority;
+    priorityDot.title = priorityTitle;
+    priorityDot.setAttribute('aria-label', priorityTitle);
+    priorityDot.textContent = priorityEmoji;
+
+    // Thread button
+    const threadBtn = document.createElement('button');
+    threadBtn.type = 'button';
+    threadBtn.className = 'idea-thread';
+    threadBtn.dataset.threadId = idea.id;
+    threadBtn.setAttribute('aria-label', 'Toggle notes');
+    threadBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-4.5L12 21l-2.5-3.5H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8.5 9.5h7M8.5 13h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>`;
+
+    // Meta container for priority + thread + time
+    const meta = document.createElement('div');
+    meta.className = 'idea-meta';
+    meta.appendChild(priorityDot);
+    meta.appendChild(threadBtn);
+    meta.appendChild(time);
+
     const textEl = document.createElement('div');
     textEl.className = 'idea-text-preview';
     textEl.innerHTML = escapeHtml(idea.text).replace(/\n/g, '<br>');
@@ -870,9 +1006,9 @@ function createIdeaListItem(idea) {
     catGroup.appendChild(catList);
     catGroup.appendChild(addBtn);
 
-    // Assemble Header: Categories (Left) | Time (Right)
+    // Assemble Header: Categories (Left) | Meta (Right)
     header.appendChild(catGroup);
-    header.appendChild(time);
+    header.appendChild(meta);
 
     content.appendChild(header);
     content.appendChild(textEl);
@@ -891,6 +1027,9 @@ function createIdeaListItem(idea) {
         </div>
     `;
     item.appendChild(editor);
+
+    // Attach thread notes (inline expandable notes)
+    attachThread(item, idea.id);
 
     return item;
 }
@@ -941,6 +1080,24 @@ if (categoryFilterClearButton) {
 cat.addEventListener('change', render);
 status.addEventListener('change', render);
 
+// Sort preference handler with persistence
+if (sortBy) {
+    // Restore saved preference
+    try {
+        const saved = localStorage.getItem(SORT_STORAGE_KEY);
+        if (saved && (saved === 'date' || saved === 'priority')) {
+            sortBy.value = saved;
+        }
+    } catch (e) { /* ignore */ }
+
+    sortBy.addEventListener('change', () => {
+        try {
+            localStorage.setItem(SORT_STORAGE_KEY, sortBy.value);
+        } catch (e) { /* ignore */ }
+        render();
+    });
+}
+
 window.addEventListener('categoryDeleted', () => {
     Promise.all([
         updateCategoryList(),
@@ -972,6 +1129,7 @@ const unsubscribe = subscribeToIdeas((ideas) => {
 // Clean up listener when page unloads
 window.addEventListener('beforeunload', () => {
     unsubscribe();
+    cleanupThreadNotes();
 });
 
 // Periodic refresh for category palette (not real-time critical)

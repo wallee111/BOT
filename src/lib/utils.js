@@ -3,12 +3,12 @@
 export const HEX_COLOR_PATTERN = /^#([0-9a-f]{6})$/i;
 
 export function escapeHtml(str = '') {
-    return str.replace(/[&<>"']/g, c => ({ 
-        '&': '&amp;', 
-        '<': '&lt;', 
-        '>': '&gt;', 
-        '"': '&quot;', 
-        "'": '&#39;' 
+    return str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
     }[c]));
 }
 
@@ -65,5 +65,47 @@ export function formatTime(timestamp) {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
+    });
+}
+
+/**
+ * Extract hashtags from text
+ * @param {string} text 
+ * @returns {string[]} Array of unique normalized tags (without #)
+ */
+export function extractTags(text = '') {
+    // Matches #tag, #complex-tag, #tag_123
+    // Does not match mid-word like #not#tag
+    const matches = text.match(/(?:^|\s)(#[a-zA-Z0-9_\-]+)/g);
+    if (!matches) return [];
+
+    // Clean up matches (remove leading space, remove #) and lowercase
+    const tags = matches.map(tag => tag.trim().slice(1).toLowerCase());
+
+    // Return unique tags
+    return [...new Set(tags)];
+}
+
+/**
+ * Wrap hashtags in text with span elements
+ * @param {string} text 
+ * @returns {string} HTML string with tags highlighted
+ */
+export function highlightTags(text = '') {
+    if (!text) return '';
+
+    // We need to escape HTML first to prevent XSS, but then we insert our own HTML
+    const escaped = escapeHtml(text);
+
+    // Replace tags with spans
+    // Note: escapeHtml allows us to safely use the input in regex replacement
+    // The regex needs to handle the escaped content correctly
+    return escaped.replace(/(?:^|\s)(#[a-zA-Z0-9_\-]+)/g, (match) => {
+        // match might include a leading space
+        const prefix = match.match(/^\s/);
+        const space = prefix ? prefix[0] : '';
+        const tag = match.trim();
+        const tagName = tag.slice(1); // remove #
+        return `${space}<span class="idea-tag" data-tag="${tagName.toLowerCase()}">${tag}</span>`;
     });
 }

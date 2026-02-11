@@ -8,12 +8,12 @@
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/index-CcKEjHfr.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-Cc9HL3xm.js">
-  <link rel="modulepreload" crossorigin href="/assets/storage-CfuHY5zo.js">
+  <script type="module" crossorigin src="/assets/index-Bvl83QMl.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-BLIFIOGs.js">
+  <link rel="modulepreload" crossorigin href="/assets/storage-DEOcNPoM.js">
   <link rel="modulepreload" crossorigin href="/assets/toast-CXqOG0Ji.js">
-  <link rel="modulepreload" crossorigin href="/assets/category-dropdown-C2W0qEJ6.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-CdCMvMMq.css">
+  <link rel="modulepreload" crossorigin href="/assets/category-dropdown-DGTtZ1XU.js">
+  <link rel="stylesheet" crossorigin href="/assets/auth-CAyG5BjP.css">
 </head>
 
 <body>
@@ -101,6 +101,15 @@
                                     required></textarea>
                                 <button type="submit" class="save-btn">Save</button>
                             </div>
+                            <div class="select-wrap icon-only priority-select" data-label="○">
+                                <select id="prioritySelect" aria-label="Set priority">
+                                    <option value="">No priority</option>
+                                    <option value="urgent">🔴 Urgent</option>
+                                    <option value="high">🟠 High</option>
+                                    <option value="medium">🟡 Medium</option>
+                                    <option value="low">⚪ Low</option>
+                                </select>
+                            </div>
                             <div class="select-wrap icon-only" data-label="#">
                                 <select id="categorySelect" aria-label="Choose category">
                                     <option value="">Choose category…</option>
@@ -117,6 +126,12 @@
 
         <!-- Desktop Detail Pane -->
         <aside class="detail-pane" id="detailPane">
+            <button type="button" class="detail-pane__close" aria-label="Close detail pane">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="6" x2="18" y2="18" stroke-width="2" stroke-linecap="round" />
+                    <line x1="18" y1="6" x2="6" y2="18" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
             <div class="detail-pane-empty">
                 <p>Select an idea to view details and comments.</p>
             </div>
