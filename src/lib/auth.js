@@ -3,13 +3,24 @@ import {
     getAuth,
     onAuthStateChanged,
     GoogleAuthProvider,
+    signInWithRedirect,
     signInWithPopup,
+    getRedirectResult,
     signOut,
 } from 'firebase/auth';
 import { app } from './firebase.js';
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
+
+// Detect if running on Capacitor (mobile)
+const isCapacitor = () => {
+    try {
+        return window.Capacitor?.isNativePlatform?.() ?? false;
+    } catch {
+        return false;
+    }
+};
 
 let currentUser = null;
 let authInitialized = false;
@@ -30,7 +41,9 @@ function waitForAuthState() {
 }
 
 export async function ensureAuthSession({ requireAuth = false } = {}) {
-    const existing = auth.currentUser || (authInitialized ? currentUser : await waitForAuthState());
+    // Always wait for auth state to be initialized
+    const existing = auth.currentUser || await waitForAuthState();
+
     if (existing || !requireAuth) {
         return existing ?? null;
     }
@@ -59,13 +72,80 @@ export async function getCurrentUserProfile() {
 }
 
 export async function signInWithGoogle() {
-    await ensureAuthSession();
-    if (auth.currentUser) {
-        return auth.currentUser;
+    try {
+        await ensureAuthSession();
+        if (auth.currentUser) {
+            console.log('[auth] User already signed in:', auth.currentUser.email);
+            return auth.currentUser;
+        }
+
+        // Use redirect for Capacitor (iOS/Android), popup for web
+        if (isCapacitor()) {
+            console.log('[auth] Capacitor detected - using redirect flow');
+            console.log('[auth] Redirecting to Google OAuth. Redirect URL: capacitor://com.bot.bucketofthoughts/signin.html');
+            await signInWithRedirect(auth, provider);
+            // After redirect, page will reload and handleSignInRedirect() will be called
+        } else {
+            console.log('[auth] Web detected - using popup flow');
+            const result = await signInWithPopup(auth, provider);
+            currentUser = result.user;
+            authInitialized = true;
+            console.log('[auth] Popup sign-in successful, user:', result.user.email);
+
+            // Wait for auth state to fully propagate
+            return new Promise((resolve) => {
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                    if (user && user.uid === result.user.uid) {
+                        console.log('[auth] Auth state confirmed for user:', user.email);
+                        currentUser = user;
+                        unsubscribe();
+                        resolve(user);
+                    }
+                });
+
+                // Fallback: resolve after 1 second even if onAuthStateChanged doesn't fire
+                setTimeout(() => {
+                    console.log('[auth] Auth state confirmation timeout, proceeding with result.user');
+                    unsubscribe();
+                    resolve(result.user);
+                }, 1000);
+            });
+        }
+    } catch (error) {
+        console.error('[auth] Sign in error:', error);
+        throw error;
     }
-    const result = await signInWithPopup(auth, provider);
-    currentUser = result.user;
-    return currentUser;
+}
+
+export async function handleSignInRedirect() {
+    try {
+        console.log('[auth] Checking for redirect result...');
+
+        // First check if Firebase already has a current user (most reliable)
+        if (auth.currentUser) {
+            console.log('[auth] User already logged in:', auth.currentUser.email);
+            currentUser = auth.currentUser;
+            authInitialized = true;
+            return auth.currentUser;
+        }
+
+        // Fallback: Check the redirect result
+        const result = await getRedirectResult(auth);
+        console.log('[auth] Redirect result:', result);
+        if (result?.user) {
+            console.log('[auth] User found from redirect:', result.user.email);
+            currentUser = result.user;
+            authInitialized = true;
+            return result.user;
+        }
+        console.log('[auth] No redirect result found');
+    } catch (error) {
+        console.error('[auth] Redirect result error:', error);
+        console.error('[auth] Error code:', error?.code);
+        console.error('[auth] Error message:', error?.message);
+        throw error;
+    }
+    return null;
 }
 
 export async function signOutUser() {

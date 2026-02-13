@@ -3,20 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
     <title>Account - BOT</title>
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/account-Sb78KCNW.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-BLIFIOGs.js">
-  <link rel="modulepreload" crossorigin href="/assets/storage-DEOcNPoM.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-CAyG5BjP.css">
-  <link rel="stylesheet" crossorigin href="/assets/account-CGKfafZH.css">
+  <script type="module" crossorigin src="/assets/account-K8t2mQrD.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/style.v1-D8hykpz9.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DXMglfQc.js">
+  <link rel="modulepreload" crossorigin href="/assets/canvas-DHrS1-Ab.js">
+  <link rel="stylesheet" crossorigin href="/assets/style-D97Dg3ue.css">
+  <link rel="stylesheet" crossorigin href="/assets/account-BtDd4wx8.css">
 </head>
 
 <body>
-    <main class="app-container">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main class="app-container" id="main-content">
         <!-- Desktop Sidebar -->
         <aside class="desktop-sidebar" aria-label="Main Navigation">
             <div class="sidebar-header">
@@ -26,6 +29,7 @@
                 <a href="index.html">Capture</a>
                 <a href="review.html">Review</a>
                 <a href="categories.html">Categories</a>
+                <a href="canvas.html">Canvas</a>
                 <a href="account.html" class="is-active">Account</a>
             </nav>
             <div class="sidebar-footer">
@@ -35,66 +39,16 @@
 
         <div class="main-content-wrap settings-container">
             <div class="settings-card">
-                <h1>Account Settings</h1>
-                <p>Manage your account and data.</p>
+                <h1>Account</h1>
 
-                <h2>Your Account</h2>
-                <p>Signed in as <span id="userEmailDisplay">Loading…</span></p>
-                <p class="account-name">Display name: <span id="userNameDisplay">Loading…</span></p>
-                <p>Your Firebase User ID:</p>
-                <div class="userid-display" id="userIdDisplay">Loading...</div>
-
-                <div class="button-group">
-                    <button class="btn btn-primary" id="copyBtn" disabled>
-                        Copy User ID
-                    </button>
-                </div>
-
-                <div id="copyStatus" class="status-message"></div>
-            </div>
-
-            <div class="settings-card">
-                <h2>Keyboard Shortcuts</h2>
-                <p>Customize your experience with custom key bindings.</p>
-                <div id="shortcutsList" class="shortcuts-list">
-                    <!-- Dynamically populated -->
-                    <div class="shortcut-loading">Loading shortcuts…</div>
-                </div>
-                <div class="shortcut-help">
-                    <p>Click a shortcut to record a new key combination. Press <code>Escape</code> to cancel recording.
-                    </p>
-                </div>
-            </div>
-
-            <div class="settings-card">
-                <h2>Sign Out</h2>
-                <p>Sign out and clear your local session. You'll sign back in with Google next time.</p>
-
-                <div class="warning-box">
-                    <strong>Heads up</strong>
-                    <p>Copy your User ID above if you ever need to share it with support.</p>
+                <div class="account-info">
+                    <p class="account-label">Signed in as</p>
+                    <p class="account-email" id="userEmailDisplay">Loading…</p>
                 </div>
 
                 <button class="btn btn-danger" id="signOutBtn">
                     Sign Out
                 </button>
-            </div>
-
-            <div class="settings-card">
-                <h2>Legacy User ID Migration</h2>
-                <p>If you previously signed in with a legacy User ID, we can migrate those notes to your Google account.
-                </p>
-                <div class="help-text">
-                    <strong>Need help migrating?</strong>
-                    <ol>
-                        <li>Sign in with Google above.</li>
-                        <li>Send your legacy User ID to the support team.</li>
-                        <li>We will map your old notes to this Google account and let you know when it is complete.</li>
-                    </ol>
-                </div>
-                <a href="signin.html" class="btn btn-secondary">
-                    Switch Google Account
-                </a>
             </div>
         </div>
     </main>
@@ -126,6 +80,23 @@
                 <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
             </svg>
             <span class="bottom-nav__label">Categories</span>
+        </a>
+        <a class="bottom-nav__item" href="canvas.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span class="bottom-nav__label">Canvas</span>
+        </a>
+        <a class="bottom-nav__item is-active" href="account.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Account</span>
         </a>
     </nav>
 

@@ -5,15 +5,24 @@ function ensureToastContainer() {
   if (!container) {
     container = document.createElement('div');
     container.className = 'toast-container';
+    // WCAG 4.1.3: Status messages must be programmatically determinable
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'true');
     document.body.appendChild(container);
   }
   return container;
 }
 
-export function showToast(message, { tone = 'error', timeout = 4200 } = {}) {
+export function showToast(message, { tone = 'error', timeout = 4200, action = null } = {}) {
   const container = ensureToastContainer();
   const toast = document.createElement('div');
   toast.className = `toast ${tone === 'error' ? 'toast--error' : ''}`;
+  // Ensure each toast is announced by screen readers
+  toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+
+  const content = document.createElement('div');
+  content.className = 'toast__content';
 
   const icon = document.createElement('span');
   icon.className = 'toast__icon';
@@ -25,6 +34,23 @@ export function showToast(message, { tone = 'error', timeout = 4200 } = {}) {
   const msg = document.createElement('div');
   msg.className = 'toast__message';
   msg.textContent = message;
+
+  content.append(icon, msg);
+  toast.appendChild(content);
+
+  // Add action button if provided
+  if (action && action.label && typeof action.onClick === 'function') {
+    const actionBtn = document.createElement('button');
+    actionBtn.className = 'toast__action';
+    actionBtn.type = 'button';
+    actionBtn.textContent = action.label;
+    actionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      action.onClick();
+      remove();
+    });
+    toast.appendChild(actionBtn);
+  }
 
   const close = document.createElement('button');
   close.className = 'toast__close';
@@ -43,7 +69,7 @@ export function showToast(message, { tone = 'error', timeout = 4200 } = {}) {
   };
   close.addEventListener('click', remove);
 
-  toast.append(icon, msg, close);
+  toast.appendChild(close);
   container.appendChild(toast);
 
   if (timeout > 0) {

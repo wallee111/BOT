@@ -23,17 +23,25 @@ export function createCategoryDropdownController(config) {
     function position(anchorEl) {
         const dropdown = config.getDropdown();
         if (!dropdown || !anchorEl) return;
+
+        // Remove hidden so we can measure, but keep menu visually closed
         dropdown.hidden = false;
-        dropdown.style.visibility = 'hidden';
-        dropdown.style.top = '0px';
-        dropdown.style.left = '0px';
+        dropdown.classList.remove('is-open');
 
         requestAnimationFrame(() => {
             const rect = anchorEl.getBoundingClientRect();
-            const panelRect = dropdown.getBoundingClientRect();
             const margin = 8;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
+
+            // Temporarily show to measure
+            dropdown.style.visibility = 'hidden';
+            dropdown.style.opacity = '0';
+            dropdown.classList.add('is-open');
+            const panelRect = dropdown.getBoundingClientRect();
+            dropdown.classList.remove('is-open');
+            dropdown.style.visibility = '';
+            dropdown.style.opacity = '';
 
             let top = rect.bottom + margin;
             let left = rect.left;
@@ -47,7 +55,11 @@ export function createCategoryDropdownController(config) {
 
             dropdown.style.top = `${Math.round(top)}px`;
             dropdown.style.left = `${Math.round(left)}px`;
-            dropdown.style.visibility = 'visible';
+
+            // Now open with animation
+            requestAnimationFrame(() => {
+                dropdown.classList.add('is-open');
+            });
         });
     }
 
@@ -78,7 +90,7 @@ export function createCategoryDropdownController(config) {
     function populateReplaceMode(content, ideaId, normalized, targetCategory) {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'category-modal__action-remove';
+        removeBtn.className = 'md3-menu__item md3-menu__item--danger';
         removeBtn.textContent = 'Remove category';
         removeBtn.addEventListener('click', async () => {
             try {
@@ -94,22 +106,24 @@ export function createCategoryDropdownController(config) {
         });
         content.appendChild(removeBtn);
 
-        const list = document.createElement('div');
+        // Divider between remove action and category list
+        const divider = document.createElement('div');
+        divider.className = 'md3-menu__divider';
+        content.appendChild(divider);
+
         const items = config.getAvailableCategories().slice();
         items.sort((a, b) => config.collator.compare(a, b));
 
         items.forEach(category => {
             if (category === '__uncategorized__') return;
-            const row = document.createElement('div');
-            row.className = 'category-modal__checkbox-item';
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'md3-menu__item';
             if ((targetCategory || '').trim().toLowerCase() === category.toLowerCase()) {
-                row.classList.add('is-active');
+                row.classList.add('is-selected');
             }
-            row.setAttribute('role', 'button');
-            row.tabIndex = 0;
 
             const span = document.createElement('span');
-            span.className = 'category-modal__checkbox-label';
             span.textContent = category;
             row.appendChild(span);
 
@@ -148,9 +162,8 @@ export function createCategoryDropdownController(config) {
                     applySelection();
                 }
             });
-            list.appendChild(row);
+            content.appendChild(row);
         });
-        content.appendChild(list);
     }
 
     function populateMultiMode(content, ideaId, normalized) {
@@ -160,7 +173,7 @@ export function createCategoryDropdownController(config) {
         items.forEach(category => {
             const isUncategorized = category === '__uncategorized__';
             const label = document.createElement('label');
-            label.className = 'category-modal__checkbox-item';
+            label.className = 'md3-menu__item';
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
@@ -168,7 +181,6 @@ export function createCategoryDropdownController(config) {
             checkbox.checked = isUncategorized ? normalized.length === 0 : normalized.includes(category);
 
             const span = document.createElement('span');
-            span.className = 'category-modal__checkbox-label';
             span.textContent = isUncategorized ? 'Uncategorized' : category;
 
             label.appendChild(checkbox);
@@ -236,6 +248,7 @@ export function createCategoryDropdownController(config) {
             }
         }
 
+        dropdown.classList.remove('is-open');
         dropdown.hidden = true;
         content.innerHTML = '';
         currentIdeaId = null;

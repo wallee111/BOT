@@ -13,17 +13,28 @@ import {
     onSnapshot,
     deleteField,
     addDoc,
-    orderBy
+    orderBy,
+    limit,
+    enableIndexedDbPersistence,
+    enableMultiTabIndexedDbPersistence
 } from 'firebase/firestore';
 import { app } from './firebase.js';
 import { HEX_COLOR_PATTERN, normalizeCategories } from './utils.js';
 import { getCurrentUserId } from './auth.js';
+import { perfMonitor } from './performance.js';
 
 const LOCAL_CACHE_KEY = 'ideas_v1_cache';
+const LOCAL_CACHE_TIMESTAMP_KEY = 'ideas_v1_cache_ts';
 const LOCAL_CATEGORY_SETTINGS_KEY = 'category_settings_v1';
+const LOCAL_CATEGORY_SETTINGS_TIMESTAMP_KEY = 'category_settings_v1_ts';
 const LOCAL_CATEGORY_USAGE_KEY = 'category_usage_v1';
 const LOCAL_MUTATION_QUEUE_KEY = 'ideas_mutation_queue_v1';
-const LOCAL_USER_SETTINGS_KEY = 'user_settings_v1';
+
+// Cache TTL configuration (in milliseconds)
+const CACHE_TTL = {
+    IDEAS: 5 * 60 * 1000,              // 5 minutes
+    CATEGORY_SETTINGS: 10 * 60 * 1000,  // 10 minutes
+};
 const MUTATION_QUEUE_EVENT = 'ideasMutationQueueChanged';
 
 const NETWORK_RETRYABLE_CODES = new Set(['unavailable', 'deadline-exceeded']);
@@ -101,14 +112,40 @@ const isPermissionDenied = (error) =>
     /insufficient permissions/i.test(error?.message || '');
 
 const db = getFirestore(app);
+
+// Enable Firestore offline persistence (IndexedDB caching)
+// This reduces read costs and improves performance on slow connections
+try {
+    // Try multi-tab persistence first (allows multiple tabs to share cache)
+    enableMultiTabIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+            // Multi-tab failed, fall back to single-tab
+            console.warn('[Firestore] Multi-tab persistence unavailable, trying single-tab');
+            enableIndexedDbPersistence(db).catch((err) => {
+                if (err.code === 'unimplemented') {
+                    console.warn('[Firestore] Persistence not available in this browser');
+                } else {
+                    console.error('[Firestore] Error enabling persistence:', err);
+                }
+            });
+        } else if (err.code === 'unimplemented') {
+            console.warn('[Firestore] Persistence not available in this browser');
+        } else {
+            console.error('[Firestore] Error enabling multi-tab persistence:', err);
+        }
+    });
+} catch (err) {
+    console.error('[Firestore] Persistence setup error:', err);
+}
+
 const ideasCollection = collection(db, 'ideas');
 const categorySettingsCollection = collection(db, 'categorySettings');
-const userSettingsCollection = collection(db, 'userSettings');
 
 const mutationExecutors = {
     saveIdea: async (payload = {}) => {
         if (!payload?.id) return;
         await setDoc(doc(ideasCollection, payload.id), payload);
+        perfMonitor.trackWrite(1);
     },
     setIdeaArchived: async ({ id, archived = true }) => {
         if (!id) return;
@@ -117,6 +154,7 @@ const mutationExecutors = {
             updatePayload.pinned = false;
         }
         await updateDoc(doc(ideasCollection, id), updatePayload);
+        perfMonitor.trackWrite(1);
     },
     setIdeaHidden: async ({ id, hidden = true }) => {
         if (!id) return;
@@ -125,21 +163,12 @@ const mutationExecutors = {
             updatePayload.pinned = false;
         }
         await updateDoc(doc(ideasCollection, id), updatePayload);
+        perfMonitor.trackWrite(1);
     },
-    setIdeaPinned: async ({ id, pinned = true, unpinnedIds = [] }) => {
+    setIdeaPinned: async ({ id, pinned = true }) => {
         if (!id) return;
-        if (pinned) {
-            const batch = writeBatch(db);
-            batch.update(doc(ideasCollection, id), { pinned: true });
-            (unpinnedIds || []).forEach(otherId => {
-                if (otherId && otherId !== id) {
-                    batch.update(doc(ideasCollection, otherId), { pinned: false });
-                }
-            });
-            await batch.commit();
-        } else {
-            await updateDoc(doc(ideasCollection, id), { pinned: false });
-        }
+        await updateDoc(doc(ideasCollection, id), { pinned: !!pinned });
+        perfMonitor.trackWrite(1);
     },
     setIdeaCategories: async ({ id, categories = [], category = '' }) => {
         if (!id) return;
@@ -147,24 +176,24 @@ const mutationExecutors = {
             category: category || categories[0] || '',
             categories
         });
+        perfMonitor.trackWrite(1);
     },
     deleteIdea: async ({ id }) => {
         if (!id) return;
         await deleteDoc(doc(ideasCollection, id));
+        perfMonitor.trackWrite(1);
     },
     updateIdeaText: async ({ id, text = '', tags }) => {
         if (!id) return;
         const payload = { text };
         if (Array.isArray(tags)) payload.tags = tags;
         await updateDoc(doc(ideasCollection, id), payload);
+        perfMonitor.trackWrite(1);
     },
     updateIdeaPriority: async ({ id, priority = '' }) => {
         if (!id) return;
         await updateDoc(doc(ideasCollection, id), { priority });
-    },
-    updateUserSettings: async ({ userId, settings = {} }) => {
-        if (!userId) return;
-        await setDoc(doc(userSettingsCollection, userId), { ...settings, userId }, { merge: true });
+        perfMonitor.trackWrite(1);
     }
 };
 
@@ -347,6 +376,17 @@ function normalizeIdeaObject(source = {}, fallbackId) {
     };
 }
 
+function isCacheValid(timestampKey, ttl) {
+    try {
+        const timestamp = localStorage.getItem(timestampKey);
+        if (!timestamp) return false;
+        const age = Date.now() - parseInt(timestamp, 10);
+        return age < ttl;
+    } catch (err) {
+        return false;
+    }
+}
+
 function readIdeasFromLocal() {
     try {
         const stored = localStorage.getItem(LOCAL_CACHE_KEY);
@@ -363,6 +403,7 @@ function writeIdeasToLocal(ideas) {
     try {
         const normalized = Array.isArray(ideas) ? ideas.map(item => normalizeIdeaObject(item, item?.id)) : [];
         localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(normalized));
+        localStorage.setItem(LOCAL_CACHE_TIMESTAMP_KEY, Date.now().toString());
     } catch (err) {
         console.warn('Unable to write to local cache', err);
     }
@@ -419,6 +460,7 @@ function writeCategorySettingsToLocal(settings) {
             }
         });
         localStorage.setItem(LOCAL_CATEGORY_SETTINGS_KEY, JSON.stringify(compact));
+        localStorage.setItem(LOCAL_CATEGORY_SETTINGS_TIMESTAMP_KEY, Date.now().toString());
     } catch (err) {
         console.warn('Unable to write category settings cache', err);
     }
@@ -437,6 +479,7 @@ function normalizeIdea(docSnap) {
 }
 
 async function fetchIdeasFromFirestore() {
+    perfMonitor.startTimer('fetchIdeasFromFirestore');
     const userId = await getCurrentUserId();
     if (!userId) {
         console.warn('[fetchIdeasFromFirestore] No user ID available, cannot fetch ideas');
@@ -450,13 +493,16 @@ async function fetchIdeasFromFirestore() {
         where('userId', '==', userId)
     );
     const snapshot = await getDocs(q);
+    perfMonitor.trackRead(snapshot.size);
     // Sort in memory
     ideasCache = snapshot.docs.map(normalizeIdea).sort((a, b) => a.createdAt - b.createdAt);
     writeIdeasToLocal(ideasCache);
+    perfMonitor.endTimer('fetchIdeasFromFirestore');
     return [...ideasCache];
 }
 
 async function fetchCategorySettingsFromFirestore() {
+    perfMonitor.startTimer('fetchCategorySettings');
     const userId = await getCurrentUserId();
     if (!userId) {
         console.warn('No user ID available, cannot fetch category settings');
@@ -465,6 +511,7 @@ async function fetchCategorySettingsFromFirestore() {
 
     const q = query(categorySettingsCollection, where('userId', '==', userId));
     const snapshot = await getDocs(q);
+    perfMonitor.trackRead(snapshot.size);
     const settings = {};
     snapshot.forEach(docSnap => {
         const data = docSnap.data() || {};
@@ -485,6 +532,7 @@ async function fetchCategorySettingsFromFirestore() {
     const normalized = normalizePaletteSettings(settings);
     categorySettingsCache = normalized;
     writeCategorySettingsToLocal(normalized);
+    perfMonitor.endTimer('fetchCategorySettings');
     return { ...normalized };
 }
 
@@ -493,9 +541,34 @@ export async function getCategoryPalette({ force = false } = {}) {
 
     // Always return localStorage data first (primary storage)
     const localSettings = { ...categorySettingsCache };
+    const cacheValid = isCacheValid(LOCAL_CATEGORY_SETTINGS_TIMESTAMP_KEY, CACHE_TTL.CATEGORY_SETTINGS);
 
-    // Only try Firestore if forced or local cache is empty
-    const shouldAttemptFirestore = firestoreAccess.canFetchCategorySettings && (force || !Object.keys(localSettings).length);
+    // Stale-while-revalidate: if cache is stale but exists, return it while refreshing in background
+    if (!force && Object.keys(localSettings).length && !cacheValid) {
+        // Return stale cache immediately
+        const staleData = { ...localSettings };
+
+        // Fetch fresh data in background (don't await)
+        if (firestoreAccess.canFetchCategorySettings) {
+            fetchCategorySettingsFromFirestore()
+                .then(firestoreSettings => {
+                    const mergedSettings = { ...firestoreSettings, ...localSettings };
+                    categorySettingsCache = normalizePaletteSettings(mergedSettings);
+                    writeCategorySettingsToLocal(categorySettingsCache);
+                })
+                .catch(error => {
+                    if (isPermissionDenied(error)) {
+                        firestoreAccess.disableCategorySettings();
+                    }
+                    console.warn('Background category settings refresh failed', error);
+                });
+        }
+
+        return staleData;
+    }
+
+    // Only try Firestore if forced, cache is valid but empty, or cache is invalid
+    const shouldAttemptFirestore = firestoreAccess.canFetchCategorySettings && (force || !cacheValid);
     if (shouldAttemptFirestore) {
         try {
             const firestoreSettings = await fetchCategorySettingsFromFirestore();
@@ -670,20 +743,29 @@ export async function renameCategory(currentName, nextName) {
     });
 
     if (matching.length) {
-        const batch = writeBatch(db);
-        matching.forEach(idea => {
-            const updated = normalizeCategories(
-                idea.categories.map(cat =>
-                    cat.trim().toLowerCase() === current.toLowerCase() ? next : cat
-                )
-            );
-            batch.update(doc(ideasCollection, idea.id), {
-                category: updated[0] || '',
-                categories: updated
-            });
-        });
+        // Firestore batch has a 500 operation limit, so we need to chunk if necessary
+        const BATCH_SIZE = 500;
+        const chunks = [];
+        for (let i = 0; i < matching.length; i += BATCH_SIZE) {
+            chunks.push(matching.slice(i, i + BATCH_SIZE));
+        }
+
         try {
-            await batch.commit();
+            for (const chunk of chunks) {
+                const batch = writeBatch(db);
+                chunk.forEach(idea => {
+                    const updated = normalizeCategories(
+                        idea.categories.map(cat =>
+                            cat.trim().toLowerCase() === current.toLowerCase() ? next : cat
+                        )
+                    );
+                    batch.update(doc(ideasCollection, idea.id), {
+                        category: updated[0] || '',
+                        categories: updated
+                    });
+                });
+                await batch.commit();
+            }
         } catch (error) {
             console.error('Unable to rename category ideas in Firestore', error);
             throw error;
@@ -761,10 +843,30 @@ export async function renameCategory(currentName, nextName) {
 }
 
 export async function getIdeas({ force = false } = {}) {
-    if (!force && ideasCache) {
+    // Stale-while-revalidate: Return cache immediately if valid, but still fetch in background if stale
+    const cacheValid = isCacheValid(LOCAL_CACHE_TIMESTAMP_KEY, CACHE_TTL.IDEAS);
+
+    if (!force && ideasCache && cacheValid) {
+        perfMonitor.trackCacheHit('ideas');
         return [...ideasCache].sort((a, b) => a.createdAt - b.createdAt);
     }
 
+    // Cache exists but is stale - return it while fetching fresh data in background
+    if (!force && ideasCache && !cacheValid) {
+        perfMonitor.trackCacheHit('ideas-stale');
+        // Return stale cache immediately
+        const staleData = [...ideasCache].sort((a, b) => a.createdAt - b.createdAt);
+
+        // Fetch fresh data in background (don't await)
+        fetchIdeasFromFirestore().catch(err => {
+            console.warn('Background refresh failed, continuing with stale cache', err);
+        });
+
+        return staleData;
+    }
+
+    // No cache or forced refresh - fetch from Firestore
+    perfMonitor.trackCacheMiss('ideas');
     try {
         return await fetchIdeasFromFirestore();
     } catch (error) {
@@ -927,29 +1029,15 @@ export async function setIdeaPinned(id, pinned = true) {
         throw new Error('User must be authenticated to update ideas');
     }
 
-    let snapshot = getIdeasCacheSnapshot();
-    if (!snapshot.length) {
-        snapshot = await getIdeas();
-    }
-    const unpinnedIds = pinned
-        ? snapshot.filter(idea => idea.id !== targetId && idea.pinned).map(idea => idea.id)
-        : [];
-
     const applyLocal = () => {
-        updateIdeasCache(existing => existing.map(idea => {
-            if (idea.id === targetId) {
-                return { ...idea, pinned };
-            }
-            if (pinned && idea.pinned) {
-                return { ...idea, pinned: false };
-            }
-            return idea;
-        }));
+        updateIdeasCache(existing => existing.map(idea =>
+            idea.id === targetId ? { ...idea, pinned } : idea
+        ));
     };
 
     await runMutation({
         type: 'setIdeaPinned',
-        payload: { id: targetId, pinned, unpinnedIds },
+        payload: { id: targetId, pinned },
         userId,
         applyLocal
     });
@@ -1271,66 +1359,163 @@ export function subscribeToNotes(ideaId, callback, onError) {
 // Legacy alias for backwards compatibility
 export const subscribeToComments = subscribeToNotes;
 
-/**
- * User Settings
- */
-
-const DEFAULT_USER_SETTINGS = {
-    shortcuts: {
-        save: 'meta+enter',
-        focusInput: 'n',
-        search: '/',
-        nextIdea: 'j',
-        prevIdea: 'k',
-        hideUnhide: 'h'
-    }
-};
-
-let userSettingsCache = null;
-
-export async function getUserSettings() {
-    if (userSettingsCache) return userSettingsCache;
-
-    // Try local storage first
-    try {
-        const stored = localStorage.getItem(LOCAL_USER_SETTINGS_KEY);
-        if (stored) {
-            userSettingsCache = JSON.parse(stored);
-            return userSettingsCache;
-        }
-    } catch (e) {
-        console.warn('Unable to read user settings from local storage', e);
-    }
-
-    // Try Firestore
+export async function deleteNote(ideaId, noteId) {
+    if (!ideaId || !noteId) throw new Error('ideaId and noteId are required');
     const userId = await getCurrentUserId();
-    if (userId) {
-        try {
-            const docSnap = await getDoc(doc(userSettingsCollection, userId));
-            if (docSnap.exists()) {
-                userSettingsCache = { ...DEFAULT_USER_SETTINGS, ...docSnap.data() };
-                localStorage.setItem(LOCAL_USER_SETTINGS_KEY, JSON.stringify(userSettingsCache));
-                return userSettingsCache;
-            }
-        } catch (e) {
-            console.warn('Unable to fetch user settings from Firestore', e);
-        }
-    }
+    if (!userId) throw new Error('User not authenticated');
 
-    userSettingsCache = DEFAULT_USER_SETTINGS;
-    return userSettingsCache;
+    // Optimistic: remove from local cache
+    const before = getNotesFromLocal(ideaId);
+    writeNotesToLocal(ideaId, before.filter(n => n.id !== noteId));
+
+    try {
+        const noteRef = doc(db, 'ideas', ideaId, 'comments', noteId);
+        await deleteDoc(noteRef);
+    } catch (error) {
+        console.error('[Notes] Failed to delete note:', error);
+        writeNotesToLocal(ideaId, before);
+        throw error;
+    }
 }
 
-export async function updateUserSettings(settings) {
+export async function updateNoteText(ideaId, noteId, newText) {
+    if (!ideaId || !noteId) throw new Error('ideaId and noteId are required');
+    if (!newText?.trim()) throw new Error('Note text is required');
     const userId = await getCurrentUserId();
-    if (!userId) return;
+    if (!userId) throw new Error('User not authenticated');
 
-    userSettingsCache = { ...userSettingsCache, ...settings };
-    localStorage.setItem(LOCAL_USER_SETTINGS_KEY, JSON.stringify(userSettingsCache));
+    const trimmed = newText.trim();
 
-    await runMutation({
-        type: 'updateUserSettings',
-        payload: { userId, settings: userSettingsCache },
-        userId
+    // Optimistic: update local cache
+    const before = getNotesFromLocal(ideaId);
+    writeNotesToLocal(ideaId, before.map(n =>
+        n.id === noteId ? { ...n, text: trimmed } : n
+    ));
+
+    try {
+        const noteRef = doc(db, 'ideas', ideaId, 'comments', noteId);
+        await updateDoc(noteRef, { text: trimmed });
+    } catch (error) {
+        console.error('[Notes] Failed to update note:', error);
+        writeNotesToLocal(ideaId, before);
+        throw error;
+    }
+}
+
+// ── Canvas Layout ──────────────────────────────────────────────
+
+const LOCAL_CANVAS_LAYOUT_KEY = 'canvas_layout_v1';
+const CANVAS_SAVE_DEBOUNCE_MS = 1500;
+let canvasSaveTimer = null;
+
+const DEFAULT_CANVAS_LAYOUT = {
+    cards: [],
+    headers: [],
+    viewport: { panX: 0, panY: 0, zoom: 1.0 },
+};
+
+function normalizeCanvasLayout(data) {
+    return {
+        cards: Array.isArray(data?.cards)
+            ? data.cards
+                .map(c => ({
+                    categoryName: (c.categoryName || '').trim(),
+                    x: Number(c.x) || 0,
+                    y: Number(c.y) || 0,
+                    width: Number(c.width) || 0,
+                }))
+                .filter(c => c.categoryName)
+            : [],
+        headers: Array.isArray(data?.headers)
+            ? data.headers.map(h => ({
+                id: h.id || generateLocalId('hdr'),
+                text: (h.text || '').trim() || 'Header',
+                x: Number(h.x) || 0,
+                y: Number(h.y) || 0,
+            }))
+            : [],
+        viewport: {
+            panX: Number(data?.viewport?.panX) || 0,
+            panY: Number(data?.viewport?.panY) || 0,
+            zoom: Math.max(0.1, Math.min(3.0, Number(data?.viewport?.zoom) || 1.0)),
+        },
+    };
+}
+
+function readCanvasLayoutFromLocal() {
+    try {
+        const stored = localStorage.getItem(LOCAL_CANVAS_LAYOUT_KEY);
+        return stored ? normalizeCanvasLayout(JSON.parse(stored)) : { ...DEFAULT_CANVAS_LAYOUT };
+    } catch (e) {
+        console.warn('[Canvas] Unable to read local layout', e);
+        return { ...DEFAULT_CANVAS_LAYOUT };
+    }
+}
+
+function writeCanvasLayoutToLocal(layout) {
+    try {
+        localStorage.setItem(LOCAL_CANVAS_LAYOUT_KEY, JSON.stringify(layout));
+    } catch (e) {
+        console.warn('[Canvas] Unable to write local layout', e);
+    }
+}
+
+export async function loadCanvasLayout() {
+    // Fast local read first
+    const local = readCanvasLayoutFromLocal();
+
+    const userId = await getCurrentUserId();
+    if (!userId) return local;
+
+    try {
+        const docRef = doc(db, 'canvasLayouts', userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const layout = normalizeCanvasLayout(docSnap.data());
+            writeCanvasLayoutToLocal(layout);
+            return layout;
+        }
+    } catch (error) {
+        console.warn('[Canvas] Unable to load layout from Firestore, using local cache', error);
+    }
+
+    return local;
+}
+
+export function saveCanvasLayout(layoutData) {
+    const normalized = normalizeCanvasLayout(layoutData);
+    writeCanvasLayoutToLocal(normalized);
+
+    clearTimeout(canvasSaveTimer);
+    canvasSaveTimer = setTimeout(async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+
+        try {
+            const docRef = doc(db, 'canvasLayouts', userId);
+            await setDoc(docRef, { ...normalized, userId, updatedAt: Date.now() }, { merge: true });
+        } catch (error) {
+            console.warn('[Canvas] Unable to save layout to Firestore', error);
+        }
+    }, CANVAS_SAVE_DEBOUNCE_MS);
+}
+
+export function subscribeToCanvasLayout(callback) {
+    let unsubscribe = () => {};
+
+    getCurrentUserId().then(userId => {
+        if (!userId) return;
+        const docRef = doc(db, 'canvasLayouts', userId);
+        unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const layout = normalizeCanvasLayout(docSnap.data());
+                writeCanvasLayoutToLocal(layout);
+                callback(layout);
+            }
+        }, (error) => {
+            console.warn('[Canvas] Layout subscription error', error);
+        });
     });
+
+    return () => unsubscribe();
 }

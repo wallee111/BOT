@@ -946,14 +946,14 @@ window.addEventListener('resize', () => {
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', async () => {
-    const userId = await getCurrentUserId();
-    if (!userId) {
-        window.location.href = 'signin.html';
-        return;
-    }
     try {
-        await ensureAuthSession({ requireAuth: true });
+        const user = await ensureAuthSession({ requireAuth: true });
+        if (!user) {
+            window.location.href = 'signin.html';
+            return;
+        }
     } catch (error) {
+        console.error('[categories] Auth required but failed:', error);
         window.location.href = 'signin.html';
         return;
     }

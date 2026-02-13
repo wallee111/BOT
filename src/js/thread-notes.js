@@ -4,9 +4,10 @@
  * Supports inline expansion on mobile and detail pane on desktop
  */
 
-import { subscribeToNotes, addNote, getNoteCount, getNotesFromLocal } from '../lib/storage.js';
+import { subscribeToNotes, addNote, getNoteCount, getNotesFromLocal, deleteNote, updateNoteText } from '../lib/storage.js';
 import { escapeHtml, formatTime } from '../lib/utils.js';
 import { showToast } from '../lib/toast.js';
+import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
 
 // State per idea: Map<ideaId, { isOpen, notes, unsubscribe, container }>
 const threadStates = new Map();
@@ -65,6 +66,27 @@ export function initThreadNotes() {
             closeDetailPane();
         }
     });
+
+    // Fix iOS Safari zoom: reset viewport scale when keyboard closes
+    if (window.visualViewport) {
+        let lastScale = 1;
+        window.visualViewport.addEventListener('resize', () => {
+            const currentScale = window.visualViewport.scale;
+            // Keyboard closed — scale went back toward 1 but page is still zoomed
+            if (lastScale > 1 && currentScale <= 1) {
+                // Reset any residual pinch-zoom the keyboard caused
+                const meta = document.querySelector('meta[name="viewport"]');
+                if (meta) {
+                    const original = meta.getAttribute('content');
+                    meta.setAttribute('content', original + ', maximum-scale=1');
+                    requestAnimationFrame(() => {
+                        meta.setAttribute('content', original);
+                    });
+                }
+            }
+            lastScale = currentScale;
+        });
+    }
 }
 
 /**
@@ -127,12 +149,25 @@ export function attachThread(ideaEl, ideaId) {
 /**
  * Update the note count badge on the thread button
  */
-function updateNoteCount(ideaEl, ideaId) {
+export function updateNoteCount(ideaEl, ideaId) {
     const count = getNoteCount(ideaId);
     const btn = ideaEl.querySelector(`.idea-thread[data-thread-id="${ideaId}"]`);
-    if (btn) {
-        btn.dataset.count = count.toString();
-        btn.title = count > 0 ? `${count} note${count !== 1 ? 's' : ''}` : 'Add notes';
+    if (!btn) return;
+
+    btn.dataset.count = count.toString();
+    btn.title = count > 0 ? `${count} note${count !== 1 ? 's' : ''}` : 'Add notes';
+
+    // Update or create inline badge span
+    let badge = btn.querySelector('.thread-count-badge');
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'thread-count-badge';
+            btn.appendChild(badge);
+        }
+        badge.textContent = count;
+    } else if (badge) {
+        badge.remove();
     }
 }
 
@@ -151,6 +186,15 @@ function bindThreadEvents(ideaEl, ideaId) {
     input?.addEventListener('input', () => {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Reset iOS zoom on blur (keyboard dismiss)
+    input?.addEventListener('blur', () => {
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+            setTimeout(() => {
+                window.scrollTo({ top: window.scrollY, behavior: 'instant' });
+            }, 50);
+        }
     });
 
     // Submit on Enter (without Shift)
@@ -382,20 +426,152 @@ function renderNotes(ideaId, notes) {
     const contentEl = state.container.querySelector(`[data-thread-content="${ideaId}"]`);
     if (!contentEl) return;
 
+    // Cleanup previous swipe gestures
+    cleanupSwipeGestures(contentEl);
+
     if (!notes || notes.length === 0) {
         contentEl.innerHTML = '<div class="thread-empty">No notes yet. Add one below.</div>';
         return;
     }
 
-    contentEl.innerHTML = notes.map(note => `
-        <div class="thread-note${note.pending ? ' is-pending' : ''}">
+    contentEl.innerHTML = '';
+
+    notes.forEach(note => {
+        const row = document.createElement('div');
+        row.className = 'thread-note-row';
+        row.dataset.id = note.id;
+        row.dataset.noteId = note.id;
+        row.dataset.ideaId = ideaId;
+        if (note.pending) row.classList.add('is-pending');
+
+        // Swipe action buttons (revealed on left swipe)
+        const actions = document.createElement('div');
+        actions.className = 'swipe-actions';
+        actions.innerHTML = `
+            <button type="button" class="swipe-btn swipe-btn--edit" data-edit-idea="${note.id}" aria-label="Edit note">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+            </button>
+            <button type="button" class="swipe-btn swipe-btn--delete" data-del-idea="${note.id}" aria-label="Delete note">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+        `;
+        row.appendChild(actions);
+
+        const noteEl = document.createElement('div');
+        noteEl.className = 'thread-note';
+        noteEl.innerHTML = `
             <div class="thread-note-text">${escapeHtml(note.text)}</div>
             <div class="thread-note-meta">${formatTime(note.createdAt)}</div>
-        </div>
-    `).join('');
+        `;
+        row.appendChild(noteEl);
+
+        contentEl.appendChild(row);
+    });
+
+    // Init swipe gestures for edit/delete (no archive for notes)
+    initSwipeGestures(contentEl, {
+        onEdit: (row) => {
+            const noteId = row?.dataset?.noteId;
+            const rowIdeaId = row?.dataset?.ideaId;
+            if (!noteId || !rowIdeaId) return;
+            openNoteInlineEditor(row, rowIdeaId, noteId);
+        },
+        onDelete: async (row) => {
+            const noteId = row?.dataset?.noteId;
+            const rowIdeaId = row?.dataset?.ideaId;
+            if (!noteId || !rowIdeaId) return;
+            if (!confirm('Delete this note?')) return;
+            row.style.opacity = '0.5';
+            row.style.pointerEvents = 'none';
+            try {
+                await deleteNote(rowIdeaId, noteId);
+                showToast('Note deleted', {
+                    timeout: 5000,
+                    action: {
+                        label: 'Undo',
+                        onClick: async () => {
+                            // Re-add note (find from before-delete state if possible)
+                            showToast('Cannot undo — note removed', { timeout: 2000 });
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to delete note:', err);
+                row.style.opacity = '';
+                row.style.pointerEvents = '';
+                showToast('Failed to delete note', { tone: 'error' });
+            }
+        },
+    });
 
     // Scroll to bottom
     contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+/**
+ * Open inline editor for a thread note
+ */
+function openNoteInlineEditor(row, ideaId, noteId) {
+    const noteEl = row.querySelector('.thread-note');
+    if (!noteEl || noteEl.querySelector('.thread-note-inline-edit')) return;
+
+    const textEl = noteEl.querySelector('.thread-note-text');
+    if (!textEl) return;
+
+    const originalText = textEl.textContent;
+    const editor = document.createElement('div');
+    editor.className = 'thread-note-inline-edit';
+    editor.innerHTML = `
+        <textarea class="thread-note-edit-input" rows="2">${escapeHtml(originalText)}</textarea>
+        <div class="thread-note-edit-actions">
+            <button type="button" class="thread-note-edit-save">Save</button>
+            <button type="button" class="thread-note-edit-cancel">Cancel</button>
+        </div>
+    `;
+
+    textEl.hidden = true;
+    textEl.after(editor);
+
+    const textarea = editor.querySelector('textarea');
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    const closeEditor = () => {
+        editor.remove();
+        textEl.hidden = false;
+    };
+
+    editor.querySelector('.thread-note-edit-save').addEventListener('click', async () => {
+        const newText = textarea.value.trim();
+        if (!newText || newText === originalText) { closeEditor(); return; }
+
+        try {
+            await updateNoteText(ideaId, noteId, newText);
+            textEl.textContent = newText;
+            showToast('Note updated', { timeout: 1500 });
+        } catch (err) {
+            console.error('Failed to update note:', err);
+            showToast('Failed to update note', { tone: 'error' });
+        }
+        closeEditor();
+    });
+
+    editor.querySelector('.thread-note-edit-cancel').addEventListener('click', closeEditor);
+
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeEditor();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            editor.querySelector('.thread-note-edit-save').click();
+        }
+    });
 }
 
 /**
@@ -468,7 +644,7 @@ function getThreadNotesStyles() {
             padding: 0.6rem 1rem;
             color: inherit;
             font-family: inherit;
-            font-size: 0.875rem;
+            font-size: 16px; /* Prevents iOS Safari auto-zoom on focus */
             resize: none;
             min-height: 38px;
             max-height: 120px;
@@ -526,27 +702,132 @@ function getThreadNotesStyles() {
             color: #ff6b6b;
         }
 
-        /* Note count badge on thread button */
-        .idea-thread[data-count]:not([data-count="0"])::after {
-            content: attr(data-count);
+        /* Thread button with inline note count */
+        .idea-thread {
+            position: relative;
+            gap: 0.15rem;
+        }
+
+        /* When count is present, let button grow to fit */
+        .idea-thread[data-count]:not([data-count="0"]) {
+            width: auto;
+            padding: 0.35rem 0.5rem 0.35rem 0.4rem;
+        }
+
+        .idea-thread .thread-count-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--md-sys-color-primary, #ffca28);
+            line-height: 1;
+        }
+
+        /* Swipeable thread note rows */
+        .thread-note-row {
+            position: relative;
+            overflow: hidden;
+            touch-action: pan-y;
+        }
+
+        .thread-note-row .swipe-actions {
             position: absolute;
-            top: -4px;
-            right: -4px;
-            font-size: 0.55rem;
-            font-weight: 600;
-            background: #ffca28;
-            color: #1a1a1a;
-            min-width: 14px;
-            height: 14px;
-            border-radius: 50%;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .thread-note-row .swipe-btn {
+            width: 52px;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 3px;
+            border: none;
+            cursor: pointer;
+            color: #fff;
         }
 
-        .idea-thread {
+        .thread-note-row .swipe-btn--edit {
+            background: #2196f3;
+        }
+
+        .thread-note-row .swipe-btn--delete {
+            background: #f44336;
+        }
+
+        .thread-note-row .thread-note {
             position: relative;
+            z-index: 2;
+            background: inherit;
+            transition: transform 0.2s ease;
+        }
+
+        .thread-note-row--open .thread-note {
+            transform: translateX(-104px);
+        }
+
+        .thread-note-row--open .swipe-actions {
+            pointer-events: auto;
+        }
+
+        .thread-note-row.is-pending {
+            opacity: 0.6;
+        }
+
+        /* Thread note inline editor */
+        .thread-note-inline-edit {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 4px 0;
+        }
+
+        .thread-note-edit-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: inherit;
+            font-family: inherit;
+            font-size: 0.875rem;
+            resize: none;
+            min-height: 48px;
+        }
+
+        .thread-note-edit-input:focus {
+            outline: none;
+            border-color: rgba(255, 202, 40, 0.5);
+        }
+
+        .thread-note-edit-actions {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .thread-note-edit-actions button {
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+
+        .thread-note-edit-save {
+            background: #ffca28;
+            color: #1a1a1a;
+        }
+
+        .thread-note-edit-cancel {
+            background: transparent;
+            color: #aaa;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
         }
     `;
 }

@@ -87,25 +87,61 @@ export function extractTags(text = '') {
 }
 
 /**
- * Wrap hashtags in text with span elements
+ * Format text content: escape HTML, linkify URLs, highlight tags, and formatting newlines
  * @param {string} text 
- * @returns {string} HTML string with tags highlighted
+ * @returns {string} Formatted HTML
  */
-export function highlightTags(text = '') {
+export function formatTextContent(text = '') {
     if (!text) return '';
 
-    // We need to escape HTML first to prevent XSS, but then we insert our own HTML
-    const escaped = escapeHtml(text);
+    // 1. Escape HTML
+    let content = escapeHtml(text);
 
-    // Replace tags with spans
-    // Note: escapeHtml allows us to safely use the input in regex replacement
-    // The regex needs to handle the escaped content correctly
-    return escaped.replace(/(?:^|\s)(#[a-zA-Z0-9_\-]+)/g, (match) => {
-        // match might include a leading space
+    // 2. Linkify URLs
+    // Matches http://, https://, or www.
+    // exclude trailing punctuation if it might be part of the sentence
+    const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/g;
+    content = content.replace(urlRegex, (url) => {
+        let href = url;
+        if (!href.startsWith('http')) {
+            href = 'http://' + href;
+        }
+        // Basic cleanup for trailing punctuation that likely isn't part of the URL
+        // e.g. "Visit google.com." -> url is "google.com" (formatting might keep the dot outside)
+        // For simplicity now, we just link what we matched.
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="idea-link">${url}</a>`;
+    });
+
+    // 3. Highlight Tags
+    // Re-using logic from highlightTags but applying to the already escaped/linked content.
+    // Caution: We must ensure we don't match things inside our new <a> tags.
+    // The tag regex requires a leading space or start of string.
+    // Our <a> tags start with <a ... which doesn't match space/#.
+    // Content inside <a> might be #tag? "google.com/#tag" -> regex matches (#tag)?
+    // The regex `(?:^|\s)(#[a-zA-Z0-9_\-]+)`
+    // In "google.com/#tag", the char before # receives no space check if we are strictly looking for space.
+    // It finds `/` before `#`. So it won't match.
+    // "Check out #cool" -> matches.
+    content = content.replace(/(?:^|\s)(#[a-zA-Z0-9_\-]+)/g, (match) => {
         const prefix = match.match(/^\s/);
         const space = prefix ? prefix[0] : '';
         const tag = match.trim();
         const tagName = tag.slice(1); // remove #
         return `${space}<span class="idea-tag" data-tag="${tagName.toLowerCase()}">${tag}</span>`;
     });
+
+    // 4. Newlines
+    content = content.replace(/\n/g, '<br>');
+
+    return content;
+}
+
+/**
+ * Wrap hashtags in text with span elements
+ * @deprecated Use formatTextContent instead for full formatting
+ * @param {string} text 
+ * @returns {string} HTML string with tags highlighted
+ */
+export function highlightTags(text = '') {
+    return formatTextContent(text);
 }

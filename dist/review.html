@@ -2,20 +2,22 @@
 <html lang="en">
 
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Review - BOT</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#ffca28">
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/review-BFPTs6Yu.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-BLIFIOGs.js">
-  <link rel="modulepreload" crossorigin href="/assets/storage-DEOcNPoM.js">
-  <link rel="modulepreload" crossorigin href="/assets/toast-CXqOG0Ji.js">
-  <link rel="modulepreload" crossorigin href="/assets/category-dropdown-DGTtZ1XU.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-CAyG5BjP.css">
+  <script type="module" crossorigin src="/assets/review-CrBowysL.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/style.v1-D8hykpz9.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DXMglfQc.js">
+  <link rel="modulepreload" crossorigin href="/assets/canvas-DHrS1-Ab.js">
+  <link rel="modulepreload" crossorigin href="/assets/category-dropdown-zEgF1DkD.js">
+  <link rel="stylesheet" crossorigin href="/assets/style-D97Dg3ue.css">
 </head>
 
 <body>
+    <a href="#list" class="skip-link">Skip to main content</a>
     <main class="app-container">
         <!-- Desktop Sidebar -->
         <aside class="desktop-sidebar" aria-label="Main Navigation">
@@ -26,6 +28,7 @@
                 <a href="index.html">Capture</a>
                 <a href="review.html" class="is-active">Review</a>
                 <a href="categories.html">Categories</a>
+                <a href="canvas.html">Canvas</a>
                 <a href="account.html">Account</a>
             </nav>
             <div class="sidebar-footer">
@@ -41,7 +44,8 @@
             </header>
             <div class="filters">
                 <div class="select-wrap filter-select filter-select--status">
-                    <select id="status">
+                    <label for="status" class="visually-hidden">Filter by status</label>
+                    <select id="status" aria-label="Filter by status">
                         <option value="all">All items</option>
                         <option value="active">Active</option>
                         <option value="archived">Archived</option>
@@ -49,11 +53,11 @@
                 </div>
                 <div class="select-wrap filter-select filter-select--category">
                     <button type="button" id="categoryFilterToggle" class="filter-multi-toggle" aria-haspopup="true"
-                        aria-expanded="false"><span>All categories</span></button>
+                        aria-expanded="false" aria-label="Filter by categories"><span>All categories</span></button>
                     <div id="categoryFilterPanel" class="filter-multi-panel" hidden>
                         <div id="categoryFilterOptions" class="filter-multi-options"></div>
                         <div class="filter-multi-actions">
-                            <button type="button" data-filter-clear>Clear</button>
+                            <button type="button" data-filter-clear aria-label="Clear category filters">Clear</button>
                         </div>
                     </div>
                 </div>
@@ -64,11 +68,12 @@
                     </select>
                 </div>
             </div>
-            <select id="cat" multiple hidden></select>
+            <label for="cat" class="visually-hidden">Categories filter (internal)</label>
+            <select id="cat" multiple hidden aria-label="Categories filter"></select>
             <ul id="list" class="list"></ul>
             <!-- Anchored Category Edit Dropdown -->
-            <div id="categoryEditDropdown" class="category-edit-dropdown" hidden>
-                <div id="categoryEditDropdownContent" class="category-edit-dropdown__content"></div>
+            <div id="categoryEditDropdown" class="md3-menu" hidden>
+                <div id="categoryEditDropdownContent" class="md3-menu__scroll"></div>
             </div>
         </div>
 
@@ -157,6 +162,23 @@
                 <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
             </svg>
             <span class="bottom-nav__label">Categories</span>
+        </a>
+        <a class="bottom-nav__item" href="canvas.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span class="bottom-nav__label">Canvas</span>
+        </a>
+        <a class="bottom-nav__item" href="account.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Account</span>
         </a>
     </nav>
 

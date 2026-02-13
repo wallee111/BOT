@@ -1,7 +1,7 @@
 import "../styles/signin.css";
 import "../styles/main.css";
 import "../styles/style.v1.css";
-import { signInWithGoogle, getCurrentUser } from '../lib/auth.js';
+import { signInWithGoogle, getCurrentUser, handleSignInRedirect } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
 
 const signInButton = document.getElementById('googleSignInBtn');
@@ -85,6 +85,19 @@ function showUnauthorizedDomainHelp(hostname, message) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Check for redirect result first (from signInWithRedirect)
+  try {
+    const redirectUser = await handleSignInRedirect();
+    if (redirectUser) {
+      window.location.href = 'index.html';
+      return;
+    }
+  } catch (error) {
+    console.error('[signin] Redirect result error:', error);
+    showStatus('Sign-in failed. Please try again.', 'error');
+  }
+
+  // Also check if user is already signed in
   const user = await getCurrentUser();
   if (user) {
     window.location.href = 'index.html';
@@ -93,6 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 if (signInButton) {
   signInButton.addEventListener('click', async () => {
+    console.log('[signin] Sign in button clicked');
     clearStatus();
     signInButton.disabled = true;
     if (signInLabel) {
@@ -101,7 +115,9 @@ if (signInButton) {
       signInButton.textContent = 'Signing in...';
     }
     try {
+      console.log('[signin] Calling signInWithGoogle()');
       await signInWithGoogle();
+      console.log('[signin] signInWithGoogle returned, redirecting to index.html');
       window.location.href = 'index.html';
     } catch (error) {
       console.error('[signin] Google sign-in failed', error);

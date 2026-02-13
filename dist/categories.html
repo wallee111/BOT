@@ -3,18 +3,21 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
     <title>Categories - BOT</title>
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/categories-BPF4dHy-.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-BLIFIOGs.js">
-  <link rel="modulepreload" crossorigin href="/assets/storage-DEOcNPoM.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-CAyG5BjP.css">
+  <script type="module" crossorigin src="/assets/categories-DUU2pO9G.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/style.v1-D8hykpz9.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DXMglfQc.js">
+  <link rel="modulepreload" crossorigin href="/assets/canvas-DHrS1-Ab.js">
+  <link rel="stylesheet" crossorigin href="/assets/style-D97Dg3ue.css">
 </head>
 
 <body>
+    <a href="#categoryList" class="skip-link">Skip to main content</a>
     <main class="app-container">
         <!-- Desktop Sidebar -->
         <aside class="desktop-sidebar" aria-label="Main Navigation">
@@ -25,6 +28,7 @@
                 <a href="index.html">Capture</a>
                 <a href="review.html">Review</a>
                 <a href="categories.html" class="is-active">Categories</a>
+                <a href="canvas.html">Canvas</a>
                 <a href="account.html">Account</a>
             </nav>
             <div class="sidebar-footer">
@@ -149,6 +153,23 @@
                 <circle cx="10.5" cy="14" r="1.1" fill="currentColor" />
             </svg>
             <span class="bottom-nav__label">Categories</span>
+        </a>
+        <a class="bottom-nav__item" href="canvas.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span class="bottom-nav__label">Canvas</span>
+        </a>
+        <a class="bottom-nav__item" href="account.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Account</span>
         </a>
     </nav>
     <div id="notesBreakdownOverlay" class="notes-overlay" role="dialog" aria-modal="true"

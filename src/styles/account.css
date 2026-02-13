@@ -1,14 +1,8 @@
-/* Light theme used intentionally on account page */
+/* Account page - clean, minimal design */
 :root {
     --acct-bg: white;
     --acct-text: #333;
     --acct-text-muted: #666;
-    --acct-text-subtle: #444;
-    --acct-text-secondary: #555;
-    --acct-surface: #f8f9fa;
-    --acct-border: #ddd;
-    --acct-btn-primary: #007bff;
-    --acct-btn-primary-hover: #0056b3;
 }
 
 body {
@@ -17,79 +11,79 @@ body {
     padding-bottom: 80px;
 }
 
+.app-container {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 100vh;
+}
+
+.main-content-wrap {
+    overflow: visible !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+
 .settings-container {
-    max-width: 600px;
-    margin: 20px auto;
+    max-width: 480px;
+    margin: 40px auto;
     padding: 24px;
     padding-bottom: 100px;
 }
 
 .settings-card {
     background: var(--acct-bg);
-    border-radius: 12px;
-    padding: 32px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .settings-card h1 {
+    margin: 0 0 32px 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--acct-text);
+    text-align: center;
+}
+
+/* Account info section */
+.account-info {
+    margin-bottom: 32px;
+    padding: 24px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.account-label {
     margin: 0 0 8px 0;
-    font-size: 24px;
-    color: var(--acct-text);
-}
-
-.settings-card h2 {
-    margin: 0 0 12px 0;
-    font-size: 18px;
-    color: var(--acct-text);
-}
-
-.settings-card p {
-    margin: 0 0 16px 0;
-    color: var(--acct-text-muted);
-    line-height: 1.5;
-}
-
-.userid-display {
-    background: var(--acct-surface);
-    border: 1px solid var(--acct-border);
-    border-radius: 6px;
-    padding: 12px;
-    font-family: monospace;
-    font-size: 13px;
-    word-break: break-all;
-    margin-bottom: 12px;
-    color: var(--acct-text);
-}
-
-.btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
+    color: var(--acct-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.account-email {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--acct-text);
+    word-break: break-word;
+}
+
+/* Sign out button */
+.btn {
+    width: 100%;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s ease;
     text-decoration: none;
     display: inline-block;
-}
-
-.btn-primary {
-    background: var(--acct-btn-primary);
-    color: white;
-}
-
-.btn-primary:hover {
-    background: var(--acct-btn-primary-hover);
-}
-
-.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #218838;
+    text-align: center;
 }
 
 .btn-danger {
@@ -99,164 +93,41 @@ body {
 
 .btn-danger:hover {
     background: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }
 
-.btn-secondary {
-    background: #6c757d;
-    color: white;
+.btn-danger:active {
+    transform: translateY(0);
 }
 
-.btn-secondary:hover {
-    background: #545b62;
+/* Focus styles for accessibility */
+.btn:focus-visible {
+    outline: 3px solid #ffca28;
+    outline-offset: 2px;
 }
 
-.button-group {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.status-message {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 14px;
-}
-
-.status-message.success {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.status-message.error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-
-.account-name {
-    color: var(--acct-text-subtle);
-    margin: 0 0 12px 0;
-}
-
-.help-text {
-    margin-top: 16px;
-    padding: 12px;
-    background: var(--acct-surface);
-    border-radius: 6px;
-    color: var(--acct-text-secondary);
-    border: 1px solid #e2e6ea;
-}
-
-.help-text ol {
-    margin: 8px 0 0 18px;
-    padding: 0;
-    color: var(--acct-text-secondary);
-}
-
-.help-text li+li {
-    margin-top: 4px;
-}
-
-.warning-box {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    border-radius: 6px;
-    padding: 16px;
-    margin-bottom: 16px;
-}
-
-.warning-box strong {
-    color: #856404;
-    display: block;
-    margin-bottom: 8px;
-}
-
-.warning-box p {
-    color: #856404;
-    margin: 0;
-}
-
-.shortcuts-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 20px;
-}
-
-.shortcut-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: #f8f9fa;
-    border: 1px solid #e1e4e8;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.shortcut-item:hover {
-    border-color: var(--acct-btn-primary);
-    background: #f0f7ff;
-}
-
-.shortcut-item.is-recording {
-    border-color: #ffc107;
-    background: #fff9e6;
-    animation: pulseBorder 1.5s infinite;
-}
-
-@keyframes pulseBorder {
-    0% {
-        box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
+/* Mobile responsive */
+@media (max-width: 640px) {
+    .settings-container {
+        margin: 20px auto;
+        padding: 16px;
     }
 
-    70% {
-        box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
+    .settings-card {
+        padding: 24px;
     }
 
-    100% {
-        box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+    .settings-card h1 {
+        font-size: 24px;
+        margin-bottom: 24px;
     }
-}
 
-.shortcut-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--acct-text-subtle);
-}
+    .account-info {
+        padding: 20px;
+    }
 
-.shortcut-key {
-    background: #fff;
-    border: 1px solid #d1d5da;
-    border-bottom-width: 3px;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-family: ui-monospace, SFMono-Regular, SF themes, monospace;
-    font-size: 12px;
-    color: #24292e;
-    min-width: 40px;
-    text-align: center;
-    cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.shortcut-help {
-    font-size: 12px;
-    color: #888;
-    background: #fdfdfe;
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px dashed #ced4da;
-}
-
-.shortcut-help p {
-    margin: 0;
-}
-
-.shortcut-help code {
-    background: #eee;
-    padding: 2px 4px;
-    border-radius: 3px;
+    .account-email {
+        font-size: 16px;
+    }
 }

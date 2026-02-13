@@ -92,14 +92,6 @@
     @apply gap-2;
   }
 
-  .focus-category-menu {
-    @apply border border-border/70 bg-popover/90 shadow-2xl shadow-black/40 backdrop-blur;
-  }
-
-  .focus-category-menu button {
-        @apply border border-border/60 bg-muted/50 text-foreground hover:bg-muted/70;
-  }
-
   .entry-panel {
     @apply bg-card/60 border border-border/70 rounded-2xl p-2.5 shadow-lg shadow-black/35 backdrop-blur;
   }
@@ -157,14 +149,6 @@
 
   .idea-category {
     @apply border border-border/50 bg-accent/20 text-accent-foreground;
-  }
-
-  .category-add-menu {
-    @apply border border-border/70 bg-popover/90 shadow-2xl shadow-black/40 backdrop-blur;
-  }
-
-  .category-add-menu__option {
-    @apply border border-transparent bg-muted/40 hover:border-border/70 hover:bg-muted/60;
   }
 
   .category-modal__panel {

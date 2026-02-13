@@ -14,33 +14,98 @@ service cloud.firestore {
       return isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // Rate limiting helper - prevent abuse
+    function notExceedingSize(data, maxSize) {
+      return data.size() <= maxSize;
+    }
+
+    // Validate string field length
+    function validStringLength(str, maxLen) {
+      return str is string && str.size() <= maxLen;
+    }
+
+    // Validate array field length
+    function validArrayLength(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen;
+    }
+
+    // Validate timestamp is not in the future (with 1 hour tolerance)
+    function validTimestamp(ts) {
+      return ts is timestamp && ts <= request.time + duration.value(1, 'h');
+    }
+
+    // Validate boolean field
+    function isBoolean(val) {
+      return val is bool;
+    }
+
+    // Validate HEX color format
+    function validHexColor(color) {
+      return color is string && color.matches('^#[0-9a-f]{6}$');
+    }
+
     match /ideas/{ideaId} {
-      allow create: if createsOwnResource(request.resource);
-      allow read, delete: if ownsResource(resource);
-      allow update: if ownsResource(resource) && request.resource.data.userId == resource.data.userId;
+      allow create: if createsOwnResource(request.resource)
+        && validStringLength(request.resource.data.text, 10000)
+        && request.resource.data.keys().hasAll(['userId', 'text', 'createdAt'])
+        && validTimestamp(request.resource.data.createdAt)
+        && validArrayLength(request.resource.data.get('categories', []), 50)
+        && validArrayLength(request.resource.data.get('tags', []), 100)
+        && isBoolean(request.resource.data.get('archived', false))
+        && isBoolean(request.resource.data.get('hidden', false))
+        && isBoolean(request.resource.data.get('pinned', false));
+      allow read: if ownsResource(resource);
+      allow delete: if ownsResource(resource);
+      allow update: if ownsResource(resource)
+        && request.resource.data.userId == resource.data.userId
+        && validStringLength(request.resource.data.text, 10000)
+        && validArrayLength(request.resource.data.get('categories', []), 50)
+        && validArrayLength(request.resource.data.get('tags', []), 100);
 
       // Thread notes (comments) - user who owns the parent idea can manage all notes
       match /comments/{commentId} {
-        // Check if user owns the PARENT idea
+        // Check if user owns the PARENT idea (NOTE: This incurs a read for each operation)
         function ownsParentIdea() {
-          return isSignedIn() && 
+          return isSignedIn() &&
             get(/databases/$(database)/documents/ideas/$(ideaId)).data.userId == request.auth.uid;
         }
-        
-        allow read, write: if ownsParentIdea();
+
+        allow read: if ownsParentIdea();
+        allow create: if ownsParentIdea()
+          && validStringLength(request.resource.data.text, 5000)
+          && request.resource.data.keys().hasAll(['userId', 'text', 'createdAt'])
+          && validTimestamp(request.resource.data.createdAt);
+        allow update: if ownsParentIdea()
+          && validStringLength(request.resource.data.text, 5000)
+          && request.resource.data.userId == resource.data.userId;
+        allow delete: if ownsParentIdea();
       }
     }
 
     match /categorySettings/{settingId} {
-      allow create: if createsOwnResource(request.resource);
-      allow read, delete: if ownsResource(resource);
-      allow update: if ownsResource(resource) && request.resource.data.userId == resource.data.userId;
+      allow create: if createsOwnResource(request.resource)
+        && validStringLength(request.resource.data.name, 100)
+        && (!request.resource.data.keys().hasAny(['color']) || validHexColor(request.resource.data.color));
+      allow read: if ownsResource(resource);
+      allow delete: if ownsResource(resource);
+      allow update: if ownsResource(resource)
+        && request.resource.data.userId == resource.data.userId
+        && validStringLength(request.resource.data.name, 100)
+        && (!request.resource.data.keys().hasAny(['color']) || validHexColor(request.resource.data.color));
     }
 
-    match /userSettings/{userId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, delete: if isSignedIn() && userId == request.auth.uid;
-      allow update: if isSignedIn() && userId == request.auth.uid;
+    match /canvasLayouts/{userId} {
+      allow create: if isSignedIn()
+        && userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && validArrayLength(request.resource.data.get('cards', []), 1000)
+        && validArrayLength(request.resource.data.get('headers', []), 100);
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn()
+        && userId == request.auth.uid
+        && validArrayLength(request.resource.data.get('cards', []), 1000)
+        && validArrayLength(request.resource.data.get('headers', []), 100);
     }
   }
 }

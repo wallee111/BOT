@@ -1,11 +1,74 @@
+/* Material Design 3 Design System */
+@import "./md3-tokens.css";
+@import "./md3-typography.css";
+@import "./md3-components.css";
+
+/* Tailwind CSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+    html {
+        /* Prevent pinch zoom across entire app (iOS PWA) */
+        touch-action: manipulation;
+    }
+
     body {
         @apply bg-background text-foreground antialiased;
     }
+
+    /* WCAG 2.4.7: Ensure all focusable elements have visible focus indicators */
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 2px solid var(--md-sys-color-primary);
+        outline-offset: 2px;
+    }
+
+    /* Remove default focus outline when focus-visible is handling it */
+    a:focus:not(:focus-visible),
+    button:focus:not(:focus-visible),
+    input:focus:not(:focus-visible),
+    textarea:focus:not(:focus-visible),
+    select:focus:not(:focus-visible),
+    [tabindex]:focus:not(:focus-visible) {
+        outline: none;
+    }
+}
+
+/* Accessibility: Skip Navigation Link (WCAG 2.4.1) */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    font-weight: 600;
+    z-index: 100;
+    border-radius: 0 0 0.25rem 0;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Accessibility: Screen Reader Only (WCAG 4.1.3) */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 /* Thread / Comment UI */

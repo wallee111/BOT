@@ -8,10 +8,11 @@ import {
     setIdeaCategories,
     getCategoryPalette,
     setIdeaArchived,
+    setIdeaPinned,
     updateIdeaText,
     updateIdeaPriority
 } from '../lib/storage.js';
-import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime } from '../lib/utils.js';
+import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime, formatTextContent } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
@@ -565,8 +566,30 @@ async function archiveIdeaFromSwipe(item) {
         await setIdeaArchived(ideaId, !currentlyArchived);
         await refreshIdeas({ force: true });
         await updateCategoryList();
+
+        const message = !currentlyArchived ? 'Idea archived' : 'Idea unarchived';
+        showToast(message, {
+            tone: 'success',
+            timeout: 5000,
+            action: {
+                label: 'UNDO',
+                onClick: async () => {
+                    try {
+                        // Revert the action
+                        await setIdeaArchived(ideaId, currentlyArchived);
+                        await refreshIdeas({ force: true });
+                        await updateCategoryList();
+                        showToast('Action undone', { tone: 'info', timeout: 2000 });
+                    } catch (undoError) {
+                        console.error('Unable to undo archive action', undoError);
+                        showToast('Failed to undo action', { tone: 'error' });
+                    }
+                }
+            }
+        });
     } catch (error) {
         console.error('Unable to archive idea', error);
+        showToast('Failed to update idea', { tone: 'error' });
     } finally {
         item.classList.remove('swipe-item--archiving');
     }
@@ -587,6 +610,28 @@ list.addEventListener('click', async e => {
     if (addTrigger) {
         const ideaId = addTrigger.dataset.categoryAddTrigger;
         categoryDropdown.open(ideaId, addTrigger, { mode: 'multi' });
+        return;
+    }
+
+    // Handle pin button clicks
+    const pinBtn = e.target.closest('.idea-pin');
+    if (pinBtn) {
+        const id = pinBtn.dataset.id;
+        const isPinned = pinBtn.dataset.pinned === 'true';
+        pinBtn.disabled = true;
+        try {
+            await setIdeaPinned(id, !isPinned);
+            pinBtn.dataset.pinned = String(!isPinned);
+            pinBtn.setAttribute('aria-pressed', String(!isPinned));
+            pinBtn.classList.toggle('is-active', !isPinned);
+            const bubble = pinBtn.closest('.idea-bubble');
+            if (bubble) bubble.classList.toggle('is-pinned', !isPinned);
+            showToast(isPinned ? 'Unpinned' : 'Pinned!', { timeout: 1200 });
+        } catch (err) {
+            console.error('Unable to pin idea', err);
+        } finally {
+            pinBtn.disabled = false;
+        }
         return;
     }
 
@@ -834,14 +879,14 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const userId = await getCurrentUserId();
-    if (!userId) {
-        window.location.href = 'signin.html';
-        return;
-    }
     try {
-        await ensureAuthSession({ requireAuth: true });
+        const user = await ensureAuthSession({ requireAuth: true });
+        if (!user) {
+            window.location.href = 'signin.html';
+            return;
+        }
     } catch (error) {
+        console.error('[review] Auth required but failed:', error);
         window.location.href = 'signin.html';
         return;
     }
@@ -912,6 +957,7 @@ function createIdeaListItem(idea) {
     const item = document.createElement('div');
     item.className = 'swipe-item';
     item.dataset.id = idea.id;
+    item.dataset.text = idea.text;
     if (idea.archived) item.classList.add('is-archived');
 
     // Swipe actions (background)
@@ -931,88 +977,55 @@ function createIdeaListItem(idea) {
     `;
     item.appendChild(actions);
 
-    // Main content
+    // Main content — uses idea-bubble component structure
     const content = document.createElement('div');
     content.className = 'swipe-item__content';
 
-    // Idea text/header
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'flex-start';
-    header.style.marginBottom = '0.5rem';
-    header.style.gap = '0.5rem';
+    const bubble = document.createElement('div');
+    bubble.className = 'idea-bubble';
+    if (idea.pinned) bubble.classList.add('is-pinned');
+    if (idea.priority) bubble.classList.add(`priority-${idea.priority}`);
 
-    const time = document.createElement('div');
-    time.className = 'idea-time';
-    time.textContent = formatTime(idea.createdAt);
-    time.style.fontSize = '0.75rem';
-    time.style.color = 'var(--muted-foreground)';
-    time.style.whiteSpace = 'nowrap';
+    const createdAt = Number(idea.createdAt) || 0;
+    const olderThanDay = (Date.now() - createdAt) > 24 * 60 * 60 * 1000;
+    const timeMarkup = olderThanDay
+        ? `${new Date(createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${formatTime(createdAt)}`
+        : formatTime(createdAt);
 
-    // Priority dot button
     const currentPriority = idea.priority || '';
     const priorityEmoji = PRIORITY_BADGES[currentPriority] || '⚫';
     const priorityTitle = currentPriority
         ? `${currentPriority.charAt(0).toUpperCase() + currentPriority.slice(1)} priority - click to change`
         : 'No priority - click to set';
-    const priorityDot = document.createElement('button');
-    priorityDot.type = 'button';
-    priorityDot.className = 'priority-dot';
-    priorityDot.dataset.id = idea.id;
-    priorityDot.dataset.priority = currentPriority;
-    priorityDot.title = priorityTitle;
-    priorityDot.setAttribute('aria-label', priorityTitle);
-    priorityDot.textContent = priorityEmoji;
 
-    // Thread button
-    const threadBtn = document.createElement('button');
-    threadBtn.type = 'button';
-    threadBtn.className = 'idea-thread';
-    threadBtn.dataset.threadId = idea.id;
-    threadBtn.setAttribute('aria-label', 'Toggle notes');
-    threadBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-4.5L12 21l-2.5-3.5H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8.5 9.5h7M8.5 13h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>`;
+    const pinIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l3.5 3.5h-2v6l2.5 2.5v1.5l-4-2.3-4 2.3v-1.5L10.5 13V7H8.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>`;
+    const threadIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-4.5L12 21l-2.5-3.5H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8.5 9.5h7M8.5 13h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>`;
 
-    // Meta container for priority + thread + time
-    const meta = document.createElement('div');
-    meta.className = 'idea-meta';
-    meta.appendChild(priorityDot);
-    meta.appendChild(threadBtn);
-    meta.appendChild(time);
+    bubble.innerHTML = `
+        <div class="idea-body">
+            <div class="idea-header">
+                <div class="category-chip-group" data-idea-id="${idea.id}">
+                    <div class="category-chip-list"></div>
+                    <button type="button" class="category-add-btn" data-category-add-trigger="${idea.id}" aria-label="Add category" aria-haspopup="dialog"><span aria-hidden="true">+</span></button>
+                </div>
+                <div class="idea-meta">
+                    <button type="button" class="priority-dot" data-id="${idea.id}" data-priority="${currentPriority}" title="${priorityTitle}" aria-label="${priorityTitle}">${priorityEmoji}</button>
+                    <div class="idea-time">${timeMarkup}</div>
+                </div>
+            </div>
+            <p class="idea-text idea-text-preview">${formatTextContent(idea.text)}</p>
+            <div class="idea-footer">
+                <div class="idea-actions">
+                    <button type="button" class="idea-pin${idea.pinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${!!idea.pinned}" aria-pressed="${!!idea.pinned}" aria-label="${idea.pinned ? 'Unpin idea' : 'Pin idea'}">${pinIcon}</button>
+                    <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Toggle notes">${threadIcon}</button>
+                </div>
+            </div>
+        </div>
+    `;
 
-    const textEl = document.createElement('div');
-    textEl.className = 'idea-text-preview';
-    textEl.innerHTML = escapeHtml(idea.text).replace(/\n/g, '<br>');
+    renderCategoryChipElements(bubble.querySelector('.category-chip-list'), getIdeaCategories(idea));
 
-    // Categories
-    const catGroup = document.createElement('div');
-    catGroup.className = 'category-chip-group';
-    catGroup.dataset.ideaId = idea.id;
-    catGroup.style.marginTop = '0'; // Reset potential margins
-    // Allow wrapping if many categories
-    catGroup.style.flexWrap = 'wrap';
-
-    const catList = document.createElement('div');
-    catList.className = 'category-chip-list';
-    renderCategoryChipElements(catList, getIdeaCategories(idea));
-
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'category-add-btn';
-    addBtn.dataset.categoryAddTrigger = idea.id;
-    addBtn.setAttribute('aria-label', 'Add category');
-    addBtn.innerHTML = '<span aria-hidden="true">+</span>';
-
-    catGroup.appendChild(catList);
-    catGroup.appendChild(addBtn);
-
-    // Assemble Header: Categories (Left) | Meta (Right)
-    header.appendChild(catGroup);
-    header.appendChild(meta);
-
-    content.appendChild(header);
-    content.appendChild(textEl);
-
+    content.appendChild(bubble);
     item.appendChild(content);
 
     // Inline Editor (hidden by default)

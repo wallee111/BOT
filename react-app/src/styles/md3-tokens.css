@@ -1,0 +1,172 @@
+/* Material Design 3 Design Tokens */
+/* Generated for Bucket of Thoughts - Dark Theme */
+
+:root {
+  /* ========================================
+     PRIMARY COLOR (Yellow Brand)
+     ======================================== */
+  --md-sys-color-primary: #ffca28;
+  --md-sys-color-on-primary: #1b1b1f;
+  --md-sys-color-primary-container: rgba(255, 202, 40, 0.18);
+  --md-sys-color-on-primary-container: #2b2100;
+
+  /* ========================================
+     SECONDARY COLOR (Blue Interactive)
+     ======================================== */
+  --md-sys-color-secondary: #4b8cfb;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: rgba(75, 140, 251, 0.15);
+  --md-sys-color-on-secondary-container: #102e5f;
+
+  /* ========================================
+     TERTIARY COLOR (Purple Special)
+     ======================================== */
+  --md-sys-color-tertiary: #9b89b3;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: rgba(155, 137, 179, 0.18);
+  --md-sys-color-on-tertiary-container: #2a1f3c;
+
+  /* ========================================
+     ERROR COLOR (Red Destructive)
+     ======================================== */
+  --md-sys-color-error: #ef4444;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: rgba(239, 68, 68, 0.15);
+  --md-sys-color-on-error-container: #410002;
+
+  /* ========================================
+     SUCCESS COLOR (Green)
+     ======================================== */
+  --md-sys-color-success: #77dd77;
+  --md-sys-color-on-success: #1b1b1f;
+  --md-sys-color-success-container: rgba(119, 221, 119, 0.15);
+  --md-sys-color-on-success-container: #e2ffe2;
+
+  /* ========================================
+     WARNING COLOR (Orange)
+     ======================================== */
+  --md-sys-color-warning: #f97316;
+  --md-sys-color-on-warning: #ffffff;
+  --md-sys-color-warning-container: rgba(249, 115, 22, 0.16);
+  --md-sys-color-on-warning-container: #fff7ed;
+
+  /* ========================================
+     INFO COLOR (Blue)
+     ======================================== */
+  --md-sys-color-info: #1d4ed8;
+  --md-sys-color-on-info: #e0edff;
+  --md-sys-color-info-container: rgba(29, 78, 216, 0.15);
+  --md-sys-color-on-info-container: #e0edff;
+
+  /* ========================================
+     SURFACE COLORS (Background Layers)
+     Dark navy theme with layered containers
+     ======================================== */
+  --md-sys-color-surface: #18182d;
+  --md-sys-color-surface-dim: #12121f;
+  --md-sys-color-surface-bright: #1f1f38;
+  --md-sys-color-surface-container-lowest: #0d0d16;
+  --md-sys-color-surface-container-low: #141416;
+  --md-sys-color-surface-container: #1a1a2a;
+  --md-sys-color-surface-container-high: #23233d;
+  --md-sys-color-surface-container-highest: #2e2e48;
+  --md-sys-color-on-surface: #f6f6f6;
+  --md-sys-color-on-surface-variant: #a9a9b2;
+
+  /* ========================================
+     OUTLINE COLORS (Borders)
+     ======================================== */
+  --md-sys-color-outline: rgba(255, 255, 255, 0.18);
+  --md-sys-color-outline-variant: rgba(255, 255, 255, 0.08);
+
+  /* ========================================
+     INVERSE COLORS (For Snackbars/Toasts)
+     ======================================== */
+  --md-sys-color-inverse-surface: #f6f6f6;
+  --md-sys-color-inverse-on-surface: #1b1b1f;
+  --md-sys-color-inverse-primary: #c79800;
+
+  /* ========================================
+     SCRIM & SHADOW
+     ======================================== */
+  --md-sys-color-scrim: rgba(0, 0, 0, 0.75);
+  --md-sys-color-shadow: rgba(0, 0, 0, 0.32);
+
+  /* ========================================
+     STATE LAYERS (Hover, Focus, Pressed)
+     MD3 standard opacity values
+     ======================================== */
+  --md-sys-state-hover-opacity: 0.08;
+  --md-sys-state-focus-opacity: 0.12;
+  --md-sys-state-pressed-opacity: 0.16;
+  --md-sys-state-dragged-opacity: 0.16;
+  --md-sys-state-disabled-opacity: 0.38;
+  --md-sys-state-disabled-container-opacity: 0.12;
+
+  /* RGB channel values for computed rgba() state layers */
+  --md-sys-color-on-surface-rgb: 246, 246, 246;
+  --md-sys-color-primary-rgb: 255, 202, 40;
+  --md-sys-color-secondary-rgb: 75, 140, 251;
+  --md-sys-color-error-rgb: 239, 68, 68;
+  --md-sys-color-warning-rgb: 249, 115, 22;
+  --md-sys-color-success-rgb: 119, 221, 119;
+
+  /* ========================================
+     ELEVATION SYSTEM (5 Levels)
+     MD3 shadow tokens for layering
+     ======================================== */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-4: 0 2px 3px rgba(0, 0, 0, 0.3), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-5: 0 4px 4px rgba(0, 0, 0, 0.3), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+
+  /* ========================================
+     MOTION SYSTEM
+     MD3 standard easing and durations
+     ======================================== */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-decelerate: cubic-bezier(0, 0, 0, 1);
+  --md-sys-motion-easing-accelerate: cubic-bezier(0.3, 0, 1, 1);
+
+  --md-sys-motion-duration-short1: 50ms;
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short3: 150ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium1: 250ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium3: 350ms;
+  --md-sys-motion-duration-medium4: 400ms;
+  --md-sys-motion-duration-long1: 450ms;
+  --md-sys-motion-duration-long2: 500ms;
+  --md-sys-motion-duration-long3: 550ms;
+  --md-sys-motion-duration-long4: 600ms;
+
+  /* Simplified aliases for common use */
+  --md-sys-motion-duration-short: 100ms;
+  --md-sys-motion-duration-medium: 250ms;
+  --md-sys-motion-duration-long: 500ms;
+
+  /* ========================================
+     SHAPE SYSTEM
+     MD3 border radius tokens
+     ======================================== */
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* ========================================
+     LEGACY TOKEN ALIASES
+     Backward compatibility with existing code
+     ======================================== */
+  --bot-brand: var(--md-sys-color-primary);
+  --bot-bg-dark: var(--md-sys-color-surface);
+  --bot-text-dark: var(--md-sys-color-on-primary);
+  --bot-text-light: var(--md-sys-color-on-surface);
+}

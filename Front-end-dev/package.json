@@ -1,0 +1,18 @@
+{
+  "name": "front-end-dev",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Frontend engineering agent for Bucket of Thoughts with WCAG accessibility expertise",
+  "scripts": {
+    "start": "npx tsx index.ts",
+    "typecheck": "npx tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.39",
+    "@types/node": "^25.2.3",
+    "dotenv": "^17.2.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

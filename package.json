@@ -3,8 +3,13 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "dev:mobile": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:mobile": "vite preview --host",
+    "cap:sync": "vite build && cap sync ios",
+    "cap:open": "cap open ios",
+    "cap:run": "vite build && cap sync ios && cap open ios"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.24",
@@ -15,6 +20,9 @@
     "vite": "^7.2.7"
   },
   "dependencies": {
+    "@capacitor/cli": "^8.0.2",
+    "@capacitor/core": "^8.0.2",
+    "@capacitor/ios": "^8.0.2",
     "firebase": "^12.6.0"
   }
 }
