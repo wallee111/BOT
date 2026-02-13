@@ -29,7 +29,41 @@
   body {
     @apply bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-foreground antialiased font-sans;
     background-attachment: fixed;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
+}
+
+/* Light theme Tailwind var overrides — applied when html[data-theme="light"] */
+[data-theme="light"] {
+  --background: 34 43% 95%;
+  --foreground: 0 0% 10%;
+  --card: 34 30% 97%;
+  --card-foreground: 0 0% 10%;
+  --popover: 34 30% 97%;
+  --popover-foreground: 0 0% 10%;
+  --primary: 43 100% 39%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 55%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 34 20% 90%;
+  --muted-foreground: 0 0% 31%;
+  --accent: 172 40% 35%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 34 15% 82%;
+  --input: 34 20% 88%;
+  --ring: 43 100% 39%;
+}
+
+[data-theme="light"] body {
+  background: var(--md-sys-color-surface);
+  background-image: none;
+}
+
+/* Smooth theme transition */
+*, *::before, *::after {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 @layer components {

@@ -1005,3 +1005,27 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('categoryDeleted', () => Promise.all([updateCategoryList(), loadExistingIdeas({ force: true }), refreshCategoryPalette({ force: true })]));
 window.addEventListener('categoryPaletteUpdated', () => refreshCategoryPalette({ force: true }));
+
+// --- Theme Toggle ---
+const THEME_KEY = 'bot_theme_v1';
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+function initThemeToggle() {
+    // Restore saved preference, default to dark
+    const saved = localStorage.getItem(THEME_KEY) || 'dark';
+    applyTheme(saved);
+
+    const btn = document.getElementById('themeToggle');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+    });
+}
+
+initThemeToggle();

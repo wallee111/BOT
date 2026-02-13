@@ -7,14 +7,21 @@
     <title>Capture - BOT</title>
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
+    <!-- Inline: apply saved theme before paint to avoid flash -->
+    <script>
+        (function() {
+            var t = localStorage.getItem('bot_theme_v1') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/index-BG9I_58S.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/style.v1-D8hykpz9.js">
+  <script type="module" crossorigin src="/assets/index-CMlqM3BK.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/style.v1-zh6LY_Ag.js">
   <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
   <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DXMglfQc.js">
   <link rel="modulepreload" crossorigin href="/assets/canvas-DHrS1-Ab.js">
   <link rel="modulepreload" crossorigin href="/assets/category-dropdown-zEgF1DkD.js">
-  <link rel="stylesheet" crossorigin href="/assets/style-D97Dg3ue.css">
+  <link rel="stylesheet" crossorigin href="/assets/style-Dn8MG0lv.css">
 </head>
 
 <body>
@@ -43,6 +50,25 @@
                     <h1 class="sm:tracking-tight">Bucket of thoughts</h1>
                 </div>
                 <div class="top-bar__controls flex items-center gap-3 flex-wrap justify-end">
+                    <!-- Theme Toggle -->
+                    <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+                        <!-- Sun icon (shown in dark mode → click to go light) -->
+                        <svg class="theme-toggle__sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <!-- Moon icon (shown in light mode → click to go dark) -->
+                        <svg class="theme-toggle__moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
                     <a class="icon-link" href="account.html" aria-label="Account">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                             <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
