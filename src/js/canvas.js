@@ -408,3 +408,20 @@ function closeThreadPanel() {
         }
     }, 260);
 }
+
+// --- Theme Toggle ---
+(function() {
+    const THEME_KEY = 'bot_theme_v1';
+    const saved = localStorage.getItem(THEME_KEY) || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+
+    const toggle = () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem(THEME_KEY, next);
+    };
+
+    document.getElementById('themeToggleSidebar')?.addEventListener('click', toggle);
+    document.getElementById('themeToggle')?.addEventListener('click', toggle);
+})();
