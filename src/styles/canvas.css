@@ -319,7 +319,7 @@
     overflow: hidden;
     position: relative;
     cursor: grab;
-    background-color: var(--bot-bg-dark);
+    background-color: var(--md-sys-color-surface-dim);
     background-image: radial-gradient(circle, var(--md-sys-color-outline-variant) 1px, transparent 1px);
     background-size: 40px 40px;
     touch-action: pan-x pan-y; /* Panning only, no pinch zoom (use zoom buttons instead) */
@@ -355,7 +355,7 @@
 .canvas-marquee {
     position: absolute;
     border: 1.5px solid var(--md-sys-color-primary);
-    background: rgba(255, 202, 40, 0.08);
+    background: var(--md-sys-color-primary-container);
     border-radius: 4px;
     pointer-events: none;
     z-index: 150;
@@ -619,8 +619,8 @@
 
 .canvas-card__add-input {
     width: 100%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: 8px;
     padding: 8px 10px;
     color: inherit;
