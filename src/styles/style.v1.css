@@ -3729,3 +3729,46 @@ button.category-pill:focus-visible {
 .capture-form__send svg {
     transform: rotate(180deg);
 }
+
+/* ========================================
+   THEME TOGGLE BUTTON
+   ======================================== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--md-sys-shape-corner-full);
+    border: 1px solid var(--md-sys-color-outline);
+    background: transparent;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+    padding: 0;
+    transition: background var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+                color var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+                transform var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
+    flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+    background: rgba(var(--md-sys-color-on-surface-rgb), 0.08);
+    transform: rotate(15deg);
+}
+
+.theme-toggle:active {
+    transform: scale(0.9) rotate(15deg);
+}
+
+/* Sun shown in dark mode, Moon shown in light mode */
+.theme-toggle__sun  { display: block; }
+.theme-toggle__moon { display: none;  }
+
+[data-theme="light"] .theme-toggle__sun  { display: none;  }
+[data-theme="light"] .theme-toggle__moon { display: block; }
+
+/* Light theme: darken body/app-container background */
+[data-theme="light"] body,
+[data-theme="light"] .app-container {
+    background: var(--md-sys-color-surface);
+}
