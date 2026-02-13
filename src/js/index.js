@@ -1019,13 +1019,14 @@ function initThemeToggle() {
     const saved = localStorage.getItem(THEME_KEY) || 'dark';
     applyTheme(saved);
 
-    const btn = document.getElementById('themeToggle');
-    if (!btn) return;
-
-    btn.addEventListener('click', () => {
+    // Wire up both buttons — sidebar (desktop) + top-bar (mobile)
+    const toggle = () => {
         const current = document.documentElement.getAttribute('data-theme') || 'dark';
         applyTheme(current === 'dark' ? 'light' : 'dark');
-    });
+    };
+
+    document.getElementById('themeToggle')?.addEventListener('click', toggle);
+    document.getElementById('themeToggleSidebar')?.addEventListener('click', toggle);
 }
 
 initThemeToggle();

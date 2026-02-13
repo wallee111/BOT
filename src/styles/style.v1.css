@@ -74,10 +74,17 @@ body {
     }
 }
 
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
 .sidebar-header h2 {
     font-size: var(--md-sys-typescale-headline-small-size);
     font-weight: var(--md-sys-typescale-headline-small-weight);
-    margin: 0 0 16px 0;
+    margin: 0;
     color: var(--md-sys-color-primary);
     letter-spacing: 0.1em;
 }
