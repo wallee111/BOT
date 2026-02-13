@@ -2287,7 +2287,7 @@ button:active {
 }
 
 .list>li+li {
-    margin-top: 0.9rem;
+    margin-top: 1.25rem;
 }
 
 .card {
