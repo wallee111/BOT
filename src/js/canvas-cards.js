@@ -518,7 +518,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
     // ── Update all cards (diff-based) ─────────────────────────────
     // Track previous ideas per card to avoid full re-renders on every snapshot
 
-    const _prevCardIdeas = new Map(); // categoryName → serialized idea IDs + texts
+    const prevCardIdeas = new Map(); // categoryName → serialized idea IDs + texts
 
     function updateAllCards(ideas, palette) {
         const cards = surfaceEl.querySelectorAll('.canvas-card');
@@ -536,8 +536,8 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             const fingerprint = relevant.map(i => `${i.id}|${i.text}|${i.priority}|${i.pinned}`).join('\n');
 
             // Only re-render if ideas actually changed for this card
-            if (_prevCardIdeas.get(categoryName) === fingerprint) return;
-            _prevCardIdeas.set(categoryName, fingerprint);
+            if (prevCardIdeas.get(categoryName) === fingerprint) return;
+            prevCardIdeas.set(categoryName, fingerprint);
 
             populateCardIdeas(cardEl, categoryName, ideas, palette || {});
         });

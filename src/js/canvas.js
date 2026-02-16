@@ -176,6 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
 
         // Clear and re-render cards/headers with fresh layout
+        cardManager.unfocusCard();
         surfaceEl.querySelectorAll('.canvas-card').forEach(el => el.remove());
         surfaceEl.querySelectorAll('.canvas-header').forEach(el => el.remove());
         layout.cards.forEach(card => {
