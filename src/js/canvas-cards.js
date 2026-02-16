@@ -36,6 +36,24 @@ export function createCardManager(surfaceEl, engine, options = {}) {
     const dragStates = new WeakMap();
     const resizeStates = new WeakMap();
     let selectionManager = null;
+    let focusedCard = null;
+
+    function focusCard(cardEl) {
+        if (focusedCard === cardEl) return;
+        unfocusCard();
+        focusedCard = cardEl;
+        cardEl.classList.add('is-focused');
+    }
+
+    function unfocusCard() {
+        if (!focusedCard) return;
+        focusedCard.classList.remove('is-focused');
+        focusedCard = null;
+    }
+
+    function isFocused(cardEl) {
+        return focusedCard === cardEl;
+    }
 
     // ── Add Card ────────────────────────────────────────────────
 
@@ -74,6 +92,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         // Remove button
         el.querySelector('.canvas-card__remove').addEventListener('click', (e) => {
             e.stopPropagation();
+            if (focusedCard === el) unfocusCard();
             cleanupCardSwipe(el);
             el.remove();
             options.onCardRemoved?.(categoryName);
@@ -85,6 +104,13 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         // Resize from corner handle
         initCardResize(el);
 
+        // Tap anywhere on card to focus it
+        el.addEventListener('click', (e) => {
+            if (isFocused(el)) return;
+            if (e.target.closest('.canvas-card__remove')) return;
+            focusCard(el);
+        });
+
         surfaceEl.appendChild(el);
         return el;
     }
@@ -92,6 +118,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
     function removeCard(categoryName) {
         const el = surfaceEl.querySelector(`.canvas-card[data-category="${CSS.escape(categoryName)}"]`);
         if (el) {
+            if (focusedCard === el) unfocusCard();
             cleanupCardSwipe(el);
             el.remove();
         }
@@ -488,15 +515,31 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         if (container) cleanupSwipeGestures(container);
     }
 
-    // ── Update all cards ────────────────────────────────────────
+    // ── Update all cards (diff-based) ─────────────────────────────
+    // Track previous ideas per card to avoid full re-renders on every snapshot
+
+    const _prevCardIdeas = new Map(); // categoryName → serialized idea IDs + texts
 
     function updateAllCards(ideas, palette) {
         const cards = surfaceEl.querySelectorAll('.canvas-card');
         cards.forEach(cardEl => {
             const categoryName = cardEl.dataset.category;
-            if (categoryName) {
-                populateCardIdeas(cardEl, categoryName, ideas, palette || {});
-            }
+            if (!categoryName) return;
+
+            // Build a lightweight fingerprint of ideas for this card
+            const lowerName = categoryName.trim().toLowerCase();
+            const relevant = ideas.filter(idea => {
+                if (idea.archived || idea.hidden) return false;
+                const cats = idea.categories || (idea.category ? [idea.category] : []);
+                return cats.some(c => c.trim().toLowerCase() === lowerName);
+            });
+            const fingerprint = relevant.map(i => `${i.id}|${i.text}|${i.priority}|${i.pinned}`).join('\n');
+
+            // Only re-render if ideas actually changed for this card
+            if (_prevCardIdeas.get(categoryName) === fingerprint) return;
+            _prevCardIdeas.set(categoryName, fingerprint);
+
+            populateCardIdeas(cardEl, categoryName, ideas, palette || {});
         });
     }
 
@@ -522,6 +565,13 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
             e.stopPropagation(); // prevent canvas pan/marquee
 
+            // If card is not focused, focus it but don't start drag
+            if (!isFocused(cardEl)) {
+                focusCard(cardEl);
+                return;
+            }
+
+            // Card is focused — proceed with drag as normal
             // If part of a multi-selection, delegate to group drag
             if (selectionManager && selectionManager.startGroupDrag(e, cardEl)) {
                 ds.isDragging = false; // group drag takes over
@@ -689,6 +739,10 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         removeCard,
         updateAllCards,
         setSelectionManager: (sm) => { selectionManager = sm; },
+        focusCard,
+        unfocusCard,
+        isFocused,
+        getFocusedCard: () => focusedCard,
         destroy,
     };
 }
