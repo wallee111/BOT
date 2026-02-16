@@ -408,6 +408,33 @@
     transition: none;
 }
 
+/* Focused state — card is interactive, shows primary border */
+.canvas-card.is-focused {
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+    border-radius: 12px;
+    z-index: 10;
+}
+
+/* Unfocused cards on canvas suppress pointer events on interactive children */
+.canvas-card:not(.is-focused) .canvas-card__body {
+    pointer-events: none;
+}
+
+.canvas-card:not(.is-focused) .canvas-card__resize-handle {
+    pointer-events: none;
+}
+
+/* Unfocused card header: pointer cursor instead of grab (indicates "tap to focus") */
+.canvas-card:not(.is-focused) .canvas-card__header {
+    cursor: pointer;
+}
+
+/* Keep remove button always accessible even when unfocused */
+.canvas-card:not(.is-focused) .canvas-card__remove {
+    pointer-events: auto;
+}
+
 /* Header is the drag handle — immediate grab, no hold delay */
 .canvas-card__header {
     display: flex;

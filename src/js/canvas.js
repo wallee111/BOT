@@ -2,7 +2,6 @@ import "../styles/main.css";
 import "../styles/style.v1.css";
 import "../styles/canvas.css";
 import {
-    getIdeas,
     getCategoryPalette,
     subscribeToIdeas,
     loadCanvasLayout,
@@ -51,42 +50,36 @@ let overlayDragCtrl = null;
 // ── Init ────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const user = await ensureAuthSession({ requireAuth: true });
-        if (!user) {
-            window.location.href = 'signin.html';
-            return;
-        }
-    } catch (error) {
-        console.error('[canvas] Auth required but failed:', error);
-        window.location.href = 'signin.html';
-        return;
-    }
-
-    // 1. Init engine
+    // 1. Init engine immediately (no data dependency)
     engine = createCanvasEngine(viewportEl, surfaceEl, {
         onViewportChange: ({ zoom }) => {
             zoomLevelDisplay.textContent = `${Math.round(zoom * 100)}%`;
             debouncedSave();
         },
+        onGestureStart: () => {
+            cardManager?.unfocusCard();
+        },
     });
 
-    // 2. Load data in parallel
-    const [savedLayout, ideas, palette] = await Promise.all([
-        loadCanvasLayout(),
-        getIdeas(),
-        getCategoryPalette(),
-    ]);
+    // 2. Render cached data INSTANTLY (before auth resolves)
+    const cachedLayout = JSON.parse(localStorage.getItem('canvas_layout_v1') || 'null');
+    const cachedIdeas = JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]');
+    const cachedPalette = JSON.parse(localStorage.getItem('category_settings_v1') || '{}');
 
-    layout = savedLayout;
-    allIdeas = ideas;
-    categoryPalette = palette;
+    if (cachedLayout) {
+        layout = {
+            cards: Array.isArray(cachedLayout.cards) ? cachedLayout.cards : [],
+            headers: Array.isArray(cachedLayout.headers) ? cachedLayout.headers : [],
+            viewport: cachedLayout.viewport || { panX: 0, panY: 0, zoom: 1.0 },
+        };
+        allIdeas = cachedIdeas;
+        categoryPalette = cachedPalette;
 
-    // 3. Restore viewport
-    engine.setState(layout.viewport);
-    zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+        engine.setState(layout.viewport);
+        zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+    }
 
-    // 4. Init card manager
+    // 3. Init managers (needed for both cached and fresh render)
     cardManager = createCardManager(surfaceEl, engine, {
         onCardMoved: (categoryName, x, y) => {
             updateLayoutCard(categoryName, x, y);
@@ -102,7 +95,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
     });
 
-    // 5. Init header manager
     headerManager = createHeaderManager(surfaceEl, headerPillsContainer, engine, {
         onHeaderMoved: (id, x, y) => {
             updateLayoutHeader(id, { x, y });
@@ -118,7 +110,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
     });
 
-    // 5b. Init selection manager (desktop marquee + group drag)
     selectionMgr = createSelectionManager(viewportEl, surfaceEl, engine, {
         onGroupMoved: (movedItems) => {
             movedItems.forEach(({ el, x, y }) => {
@@ -134,17 +125,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     cardManager.setSelectionManager(selectionMgr);
     headerManager.setSelectionManager(selectionMgr);
 
-    // 6. Render saved cards
-    layout.cards.forEach(card => {
-        cardManager.addCard(card.categoryName, card.x, card.y, allIdeas, categoryPalette, card.width, card.bodyHeight);
+    // 4. Render cached cards + headers instantly (before auth)
+    if (layout) {
+        layout.cards.forEach(card => {
+            cardManager.addCard(card.categoryName, card.x, card.y, allIdeas, categoryPalette, card.width, card.bodyHeight);
+        });
+        layout.headers.forEach(header => {
+            headerManager.addHeader(header.id, header.text, header.x, header.y);
+        });
+        console.log('[canvas] Rendered cached layout instantly');
+    }
+
+    // 5. Wire up toolbar + thread panel (no data dependency)
+    // Unfocus card when tapping empty canvas
+    viewportEl.addEventListener('click', (e) => {
+        if (e.target === viewportEl || e.target === surfaceEl) {
+            cardManager?.unfocusCard();
+        }
     });
 
-    // 7. Render saved headers
-    layout.headers.forEach(header => {
-        headerManager.addHeader(header.id, header.text, header.x, header.y);
-    });
+    initToolbar();
+    initThreadNotes();
+    initThreadPanel();
+    overlayDragCtrl = createOverlayDragController(addOverlay, viewportEl);
 
-    // 8. Real-time idea updates
+    // 6. Auth check (UI is already showing cached data)
+    try {
+        const user = await ensureAuthSession({ requireAuth: true });
+        if (!user) {
+            window.location.href = 'signin.html';
+            return;
+        }
+    } catch (error) {
+        console.error('[canvas] Auth required but failed:', error);
+        window.location.href = 'signin.html';
+        return;
+    }
+
+    // 7. Load fresh data from Firestore (reconcile with cache)
+    const [savedLayout, palette] = await Promise.all([
+        loadCanvasLayout(),
+        getCategoryPalette(),
+    ]);
+
+    // Update layout if Firestore has newer data
+    const layoutChanged = JSON.stringify(savedLayout) !== JSON.stringify(layout);
+    if (layoutChanged) {
+        layout = savedLayout;
+        engine.setState(layout.viewport);
+        zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+
+        // Clear and re-render cards/headers with fresh layout
+        surfaceEl.querySelectorAll('.canvas-card').forEach(el => el.remove());
+        surfaceEl.querySelectorAll('.canvas-header').forEach(el => el.remove());
+        layout.cards.forEach(card => {
+            cardManager.addCard(card.categoryName, card.x, card.y, allIdeas, categoryPalette, card.width, card.bodyHeight);
+        });
+        layout.headers.forEach(header => {
+            headerManager.addHeader(header.id, header.text, header.x, header.y);
+        });
+    }
+
+    categoryPalette = palette;
+
+    // 8. Real-time listener as single source of truth (replaces getIdeas() call)
     const unsubscribe = subscribeToIdeas((ideas) => {
         allIdeas = ideas;
         cardManager.updateAllCards(ideas, categoryPalette);
@@ -153,16 +197,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('beforeunload', () => {
         unsubscribe();
     });
-
-    // 9. Wire up toolbar
-    initToolbar();
-
-    // 10. Init thread notes module + panel
-    initThreadNotes();
-    initThreadPanel();
-
-    // 11. Init draggable add overlay
-    overlayDragCtrl = createOverlayDragController(addOverlay, viewportEl);
 });
 
 // ── Layout mutations ────────────────────────────────────────────
@@ -348,10 +382,13 @@ function initThreadPanel() {
         openThreadPanel(ideaId, trigger);
     });
 
-    // Close panel on Escape
+    // Close panel on Escape + unfocus card
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && activeThreadIdeaId) {
-            closeThreadPanel();
+        if (e.key === 'Escape') {
+            if (activeThreadIdeaId) {
+                closeThreadPanel();
+            }
+            cardManager?.unfocusCard();
         }
     });
 }

@@ -112,6 +112,7 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
         }
 
         state.isPanning = true;
+        options.onGestureStart?.();
         state.panPointerId = e.pointerId;
         state.panStartX = e.clientX;
         state.panStartY = e.clientY;
@@ -191,6 +192,7 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
     }
 
     function startGestureDetection() {
+        options.onGestureStart?.();
         const mid = getPointerMidpoint();
         pinchState = {
             initialDist: getPointerDistance(),
@@ -277,6 +279,7 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
         }
 
         e.preventDefault();
+        options.onGestureStart?.();
 
         // Reduce sensitivity: use smaller step for trackpad precision
         const wheelZoomStep = ZOOM_STEP * 0.5; // 50% of button zoom for smoother wheel/trackpad zoom
