@@ -5,9 +5,9 @@ function transformIdea(doc) {
     text: data.text,
     categories: data.categories || [],
     tags: data.tags || [],
-    priority: data.priority || 0,
-    pinned: data.pinned || false,
-    archived: data.archived || false,
+    priority: data.priority ?? 0,
+    pinned: data.pinned ?? false,
+    archived: data.archived ?? false,
     createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null,
   };
 }

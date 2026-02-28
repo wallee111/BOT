@@ -1,9 +1,13 @@
 const { transformIdea, transformCategory } = require('./transform');
-const { Timestamp } = require('firebase-admin/firestore');
+
+// Stub Timestamp — avoids firebase-admin credential requirement in tests
+function makeTimestamp(isoString) {
+  return { toDate: () => new Date(isoString) };
+}
 
 describe('transformIdea', () => {
   it('converts a Firestore doc snapshot to a plain idea object', () => {
-    const ts = Timestamp.fromDate(new Date('2026-02-27T10:00:00.000Z'));
+    const ts = makeTimestamp('2026-02-27T10:00:00.000Z');
     const fakeDoc = {
       id: 'idea-abc',
       data: () => ({
@@ -41,7 +45,7 @@ describe('transformIdea', () => {
       data: () => ({
         text: 'Minimal idea',
         userId: 'user-123',
-        createdAt: Timestamp.fromDate(new Date('2026-01-01T00:00:00.000Z')),
+        createdAt: makeTimestamp('2026-01-01T00:00:00.000Z'),
       }),
     };
 
@@ -52,6 +56,14 @@ describe('transformIdea', () => {
     expect(result.pinned).toBe(false);
     expect(result.archived).toBe(false);
     expect(result.priority).toBe(0);
+  });
+
+  it('preserves explicit priority 0 as 0', () => {
+    const fakeDoc = {
+      id: 'idea-p0',
+      data: () => ({ text: 'Zero priority idea', priority: 0, userId: 'u', createdAt: null }),
+    };
+    expect(transformIdea(fakeDoc).priority).toBe(0);
   });
 });
 
@@ -74,5 +86,14 @@ describe('transformCategory', () => {
       color: '#ffca28',
     });
     expect(result.userId).toBeUndefined();
+  });
+
+  it('returns null color when color field is absent', () => {
+    const fakeDoc = {
+      id: 'cat-456',
+      data: () => ({ name: 'General', userId: 'user-123' }),
+    };
+    const result = transformCategory(fakeDoc);
+    expect(result.color).toBeNull();
   });
 });
