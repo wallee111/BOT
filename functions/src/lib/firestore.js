@@ -1,7 +1,9 @@
-const { initializeApp } = require('firebase-admin/app');
+const { initializeApp, getApps } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-initializeApp();
+if (!getApps().length) {
+  initializeApp();
+}
 
 const db = getFirestore();
 
