@@ -1,0 +1,23 @@
+{
+  "name": "bot-api-functions",
+  "description": "Bucket of Thoughts Cloud Functions API",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "test": "jest --runInBand",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^6.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "private": true
+}
