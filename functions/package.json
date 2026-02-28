@@ -3,8 +3,7 @@
   "description": "Bucket of Thoughts Cloud Functions API",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
-    "test": "jest --runInBand",
-    "lint": "eslint ."
+    "test": "jest --runInBand"
   },
   "engines": {
     "node": "20"
