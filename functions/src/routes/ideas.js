@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { FieldValue } = require('firebase-admin/firestore');
+const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { db } = require('../lib/firestore');
 const { transformIdea } = require('../lib/transform');
 
@@ -49,7 +49,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const doc = await db.collection('ideas').doc(req.params.id).get();
-    if (!doc.exists) {
+    if (!doc.exists || doc.data().userId !== process.env.OWNER_USER_ID) {
       return res.status(404).json({ success: false, error: 'Idea not found' });
     }
     res.json({ success: true, data: transformIdea(doc) });
@@ -69,7 +69,6 @@ router.post('/', async (req, res) => {
     }
 
     const userId = process.env.OWNER_USER_ID;
-    const { Timestamp } = require('firebase-admin/firestore');
 
     const newIdea = {
       text: text.trim(),
@@ -100,7 +99,7 @@ router.patch('/:id', async (req, res) => {
     const ref = db.collection('ideas').doc(req.params.id);
     const existing = await ref.get();
 
-    if (!existing.exists) {
+    if (!existing.exists || existing.data().userId !== process.env.OWNER_USER_ID) {
       return res.status(404).json({ success: false, error: 'Idea not found' });
     }
 
@@ -134,7 +133,7 @@ router.post('/:id/categories', async (req, res) => {
 
     const ref = db.collection('ideas').doc(req.params.id);
     const existing = await ref.get();
-    if (!existing.exists) {
+    if (!existing.exists || existing.data().userId !== process.env.OWNER_USER_ID) {
       return res.status(404).json({ success: false, error: 'Idea not found' });
     }
 
@@ -158,7 +157,7 @@ router.post('/:id/tags', async (req, res) => {
 
     const ref = db.collection('ideas').doc(req.params.id);
     const existing = await ref.get();
-    if (!existing.exists) {
+    if (!existing.exists || existing.data().userId !== process.env.OWNER_USER_ID) {
       return res.status(404).json({ success: false, error: 'Idea not found' });
     }
 
