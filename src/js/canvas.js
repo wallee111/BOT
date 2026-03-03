@@ -6,6 +6,8 @@ import {
     subscribeToIdeas,
     loadCanvasLayout,
     saveCanvasLayout,
+    subscribeToCanvasLayout,
+    subscribeToCategorySettings,
 } from '../lib/storage.js';
 import { getCategoryAppearance, escapeHtml } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
@@ -38,14 +40,19 @@ const threadPanelClose = document.getElementById('threadPanelClose');
 
 let allIdeas = [];
 let categoryPalette = {};
-let layout = null;
+let layout = { cards: [], headers: [], viewport: { panX: 0, panY: 0, zoom: 1.0 } };
 let engine = null;
 let cardManager = null;
 let headerManager = null;
 let selectionMgr = null;
 let saveTimer = null;
 let activeThreadIdeaId = null;
+let threadPanelTrigger = null;
+let closePanelTimer = null;
 let overlayDragCtrl = null;
+// Guard flag: true while we are flushing a save to Firestore so the echoed
+// snapshot from subscribeToCanvasLayout does not trigger a redundant re-render.
+let isSavingLocally = false;
 
 // ── Init ────────────────────────────────────────────────────────
 
@@ -54,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     engine = createCanvasEngine(viewportEl, surfaceEl, {
         onViewportChange: ({ zoom }) => {
             zoomLevelDisplay.textContent = `${Math.round(zoom * 100)}%`;
+            zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(zoom * 100)}%`);
             debouncedSave();
         },
         onGestureStart: () => {
@@ -77,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         engine.setState(layout.viewport);
         zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+        zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(layout.viewport.zoom * 100)}%`);
     }
 
     // 3. Init managers (needed for both cached and fresh render)
@@ -87,6 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onCardRemoved: (categoryName) => {
             removeLayoutCard(categoryName);
+            updateCanvasEmptyState();
             debouncedSave();
         },
         onCardResized: (categoryName, width, bodyHeight) => {
@@ -106,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onHeaderDeleted: (id) => {
             removeLayoutHeader(id);
+            updateCanvasEmptyState();
             debouncedSave();
         },
     });
@@ -135,6 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         console.log('[canvas] Rendered cached layout instantly');
     }
+    updateCanvasEmptyState();
 
     // 5. Wire up toolbar + thread panel (no data dependency)
     // Unfocus card when tapping empty canvas
@@ -174,31 +186,102 @@ document.addEventListener('DOMContentLoaded', async () => {
         layout = savedLayout;
         engine.setState(layout.viewport);
         zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+        zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(layout.viewport.zoom * 100)}%`);
 
         // Clear and re-render cards/headers with fresh layout
         cardManager.unfocusCard();
         surfaceEl.querySelectorAll('.canvas-card').forEach(el => el.remove());
         surfaceEl.querySelectorAll('.canvas-header').forEach(el => el.remove());
+        headerPillsContainer.innerHTML = '';
         layout.cards.forEach(card => {
             cardManager.addCard(card.categoryName, card.x, card.y, allIdeas, categoryPalette, card.width, card.bodyHeight);
         });
         layout.headers.forEach(header => {
             headerManager.addHeader(header.id, header.text, header.x, header.y);
         });
+        updateCanvasEmptyState();
     }
 
     categoryPalette = palette;
 
-    // 8. Real-time listener as single source of truth (replaces getIdeas() call)
+    // 8. Real-time listeners as single source of truth
     const unsubscribe = subscribeToIdeas((ideas) => {
         allIdeas = ideas;
         cardManager.updateAllCards(ideas, categoryPalette);
     });
 
+    // 9. Real-time canvas layout listener — receives changes from other devices.
+    //    The isSavingLocally guard suppresses the echo of our own writes.
+    const unsubLayout = subscribeToCanvasLayout((remoteLayout) => {
+        if (isSavingLocally) return;
+        if (JSON.stringify(remoteLayout) === JSON.stringify(layout)) return;
+
+        layout = remoteLayout;
+        engine.setState(layout.viewport);
+        zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+        zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(layout.viewport.zoom * 100)}%`);
+
+        cardManager.unfocusCard();
+        surfaceEl.querySelectorAll('.canvas-card').forEach(el => el.remove());
+        surfaceEl.querySelectorAll('.canvas-header').forEach(el => el.remove());
+        headerPillsContainer.innerHTML = '';
+        layout.cards.forEach(card => {
+            cardManager.addCard(card.categoryName, card.x, card.y, allIdeas, categoryPalette, card.width, card.bodyHeight);
+        });
+        layout.headers.forEach(header => {
+            headerManager.addHeader(header.id, header.text, header.x, header.y);
+        });
+        updateCanvasEmptyState();
+    });
+
+    // 10. Real-time category settings listener — keeps palette current across devices.
+    const unsubCategorySettings = subscribeToCategorySettings((palette) => {
+        categoryPalette = palette;
+        cardManager.updateAllCards(allIdeas, categoryPalette);
+    });
+
     window.addEventListener('beforeunload', () => {
         unsubscribe();
+        unsubLayout();
+        unsubCategorySettings();
     });
 });
+
+// ── Visibility Change ────────────────────────────────────────────
+// Force palette refresh when the tab/app returns from the background.
+// The real-time layout listener handles idea/layout sync automatically;
+// this only needs to cover the palette (category settings).
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        getCategoryPalette({ force: true }).then(palette => {
+            categoryPalette = palette;
+            cardManager?.updateAllCards(allIdeas, categoryPalette);
+        }).catch(console.error);
+    }
+});
+
+// ── Canvas Empty State ───────────────────────────────────────────
+
+function updateCanvasEmptyState() {
+    const hasContent = layout && (layout.cards.length > 0 || layout.headers.length > 0);
+    const existing = viewportEl?.querySelector('.canvas-empty-state');
+
+    if (!hasContent) {
+        if (!existing && viewportEl) {
+            const el = document.createElement('div');
+            el.className = 'canvas-empty-state';
+            el.setAttribute('aria-live', 'polite');
+            el.innerHTML = `
+                <p class="canvas-empty-state__headline">Your canvas is empty</p>
+                <p class="canvas-empty-state__hint">Tap <strong>Add List</strong> to place a category on the canvas.</p>
+            `;
+            viewportEl.appendChild(el);
+        }
+    } else {
+        existing?.remove();
+    }
+}
 
 // ── Layout mutations ────────────────────────────────────────────
 
@@ -235,7 +318,12 @@ function debouncedSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         layout.viewport = engine.getState();
+        isSavingLocally = true;
         saveCanvasLayout(layout);
+        // Reset the guard after enough time for the echoed snapshot to arrive.
+        // saveCanvasLayout has its own 800 ms internal debounce, so 2 s covers the
+        // round-trip: debounce flush → Firestore write → onSnapshot callback.
+        setTimeout(() => { isSavingLocally = false; }, 2000);
     }, 800);
 }
 
@@ -272,6 +360,7 @@ function initToolbar() {
 
         layout.headers.push({ id, text: 'New Header', x: snapped.x, y: snapped.y });
         headerManager.addHeader(id, 'New Header', snapped.x, snapped.y);
+        updateCanvasEmptyState();
         debouncedSave();
     });
 }
@@ -307,6 +396,7 @@ function openCategoryMenu() {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'md3-menu__item';
+            btn.setAttribute('role', 'menuitem');
 
             const appearance = getCategoryAppearance(cat, categoryPalette);
             const dot = document.createElement('span');
@@ -332,10 +422,14 @@ function openCategoryMenu() {
     }
 
     // Position above the add button (opens upward since button is at bottom-right)
+    // Use visualViewport when available — on mobile with keyboard open, innerHeight
+    // includes the hidden area behind the keyboard, causing the menu to misposition.
     const rect = addCategoryBtn.getBoundingClientRect();
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    const vw = window.visualViewport?.width ?? window.innerWidth;
     categoryMenu.style.position = 'fixed';
-    categoryMenu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-    categoryMenu.style.right = `${window.innerWidth - rect.right}px`;
+    categoryMenu.style.bottom = `${vh - rect.top + 4}px`;
+    categoryMenu.style.right = `${vw - rect.right}px`;
     categoryMenu.style.top = 'auto';
     categoryMenu.style.left = 'auto';
     categoryMenu.hidden = false;
@@ -345,8 +439,13 @@ function openCategoryMenu() {
 
 function closeCategoryMenu() {
     categoryMenu.classList.remove('is-open');
-    categoryMenu.hidden = true;
     addCategoryBtn.setAttribute('aria-expanded', 'false');
+    // Delay hiding until the CSS close transition completes (~200 ms)
+    setTimeout(() => {
+        if (!categoryMenu.classList.contains('is-open')) {
+            categoryMenu.hidden = true;
+        }
+    }, 200);
 }
 
 function addCategoryToCanvas(categoryName) {
@@ -355,9 +454,30 @@ function addCategoryToCanvas(categoryName) {
     const snapped = engine.snapToGrid(center.x - 160, center.y - 100);
 
     layout.cards.push({ categoryName, x: snapped.x, y: snapped.y, width: 0 });
-    cardManager.addCard(categoryName, snapped.x, snapped.y, allIdeas, categoryPalette, 0);
+    const newCard = cardManager.addCard(categoryName, snapped.x, snapped.y, allIdeas, categoryPalette, 0);
+    if (newCard) {
+        cardManager.focusCard?.(newCard);
+        centerOnCard(newCard, snapped);
+    }
+    updateCanvasEmptyState();
     debouncedSave();
     showToast(`Added "${categoryName}" to canvas`, { timeout: 1500 });
+}
+
+function centerOnCard(cardEl, coords) {
+    if (!cardEl || !engine) return;
+
+    const { zoom } = engine.getState();
+    const viewportRect = viewportEl.getBoundingClientRect();
+    const width = cardEl.offsetWidth || 320;
+    const height = cardEl.offsetHeight || 240;
+    const surfaceCenterX = (coords?.x ?? 0) + width / 2;
+    const surfaceCenterY = (coords?.y ?? 0) + height / 2;
+
+    const targetPanX = (viewportRect.width / 2) - surfaceCenterX * zoom;
+    const targetPanY = (viewportRect.height / 2) - surfaceCenterY * zoom;
+
+    engine.animateTo(targetPanX, targetPanY, zoom, 220);
 }
 
 // ── Thread Panel ─────────────────────────────────────────────────
@@ -383,11 +503,12 @@ function initThreadPanel() {
         openThreadPanel(ideaId, trigger);
     });
 
-    // Close panel on Escape + unfocus card
+    // Close panel on Escape — prioritise thread panel over card unfocus
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             if (activeThreadIdeaId) {
                 closeThreadPanel();
+                return; // Don't also unfocus the card
             }
             cardManager?.unfocusCard();
         }
@@ -395,9 +516,21 @@ function initThreadPanel() {
 }
 
 function openThreadPanel(ideaId, triggerEl) {
-    // Close previous if open
+    if (closePanelTimer) {
+        clearTimeout(closePanelTimer);
+        closePanelTimer = null;
+    }
+
+    // Always unsubscribe any existing Firestore listener for this ideaId before
+    // re-attaching, to prevent duplicate subscriptions when the same idea is
+    // reopened (Fix 3 + Fix 7 combined).
     if (activeThreadIdeaId) {
         closeThread(activeThreadIdeaId);
+    }
+    // Also clean up the target ideaId's subscription if it differs from the
+    // previously active one (e.g. panel was closed mid-animation).
+    if (ideaId !== activeThreadIdeaId) {
+        closeThread(ideaId);
     }
 
     activeThreadIdeaId = ideaId;
@@ -424,27 +557,40 @@ function openThreadPanel(ideaId, triggerEl) {
     attachThread(threadHost, ideaId);
     openThread(ideaId);
 
+    // Store trigger for focus return on close
+    threadPanelTrigger = triggerEl || null;
+
     // Show panel
     threadPanel.hidden = false;
     requestAnimationFrame(() => {
         threadPanel.classList.add('is-open');
+        threadPanelClose?.focus();
     });
 }
 
 function closeThreadPanel() {
+    const triggerToReturn = threadPanelTrigger;
+    threadPanelTrigger = null;
+
     if (activeThreadIdeaId) {
         closeThread(activeThreadIdeaId);
         activeThreadIdeaId = null;
     }
 
     threadPanel.classList.remove('is-open');
-    // Wait for transition to finish before hiding
-    setTimeout(() => {
+    // Wait for CSS close transition to finish before hiding
+    closePanelTimer = setTimeout(() => {
         if (!threadPanel.classList.contains('is-open')) {
             threadPanel.hidden = true;
             threadPanelBody.innerHTML = '';
         }
+        closePanelTimer = null;
     }, 260);
+
+    // Return focus to the element that triggered the panel
+    if (triggerToReturn && typeof triggerToReturn.focus === 'function') {
+        triggerToReturn.focus();
+    }
 }
 
 // --- Theme Toggle ---
