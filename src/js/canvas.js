@@ -320,10 +320,12 @@ function debouncedSave() {
         layout.viewport = engine.getState();
         isSavingLocally = true;
         saveCanvasLayout(layout);
-        // Reset the guard after enough time for the echoed snapshot to arrive.
-        // saveCanvasLayout has its own 800 ms internal debounce, so 2 s covers the
-        // round-trip: debounce flush → Firestore write → onSnapshot callback.
-        setTimeout(() => { isSavingLocally = false; }, 2000);
+        // Reset the guard after the Firestore round-trip completes.
+        // saveCanvasLayout has its own 1500 ms internal debounce before the write fires,
+        // leaving only ~500 ms of this 2 s window for the actual network round-trip.
+        // The JSON.stringify equality guard in subscribeToCanvasLayout acts as a
+        // secondary safety net if the snapshot arrives after this flag resets.
+        setTimeout(() => { isSavingLocally = false; }, 4000);
     }, 800);
 }
 
@@ -453,7 +455,7 @@ function addCategoryToCanvas(categoryName) {
     const center = engine.viewportToSurface(rect.left + rect.width / 2, rect.top + rect.height / 2);
     const snapped = engine.snapToGrid(center.x - 160, center.y - 100);
 
-    layout.cards.push({ categoryName, x: snapped.x, y: snapped.y, width: 0 });
+    layout.cards.push({ categoryName, x: snapped.x, y: snapped.y, width: 0, bodyHeight: 0 });
     const newCard = cardManager.addCard(categoryName, snapped.x, snapped.y, allIdeas, categoryPalette, 0);
     if (newCard) {
         cardManager.focusCard?.(newCard);
