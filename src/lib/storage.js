@@ -902,17 +902,9 @@ export function subscribeToIdeas(callback) {
             where('userId', '==', userId)
         );
         unsubscribe = onSnapshot(q, (snapshot) => {
-            const ideas = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                ideas.push({
-                    id: doc.id,
-                    ...data
-                });
-            });
-
-            // Sort in memory by createdAt ascending (matches getIdeas())
-            ideas.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            const ideas = snapshot.docs
+                .map(doc => normalizeIdeaObject(doc.data() || {}, doc.id))
+                .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
             // Update cache and localStorage
             ideasCache = ideas;
