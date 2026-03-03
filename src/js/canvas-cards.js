@@ -290,6 +290,10 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         if (bodyEl && savedScrollTop > 0) {
             requestAnimationFrame(() => { bodyEl.scrollTop = savedScrollTop; });
         }
+
+        // Pre-seed fingerprint so the first updateAllCards call skips this card
+        const fingerprint = filtered.map(i => `${i.id}|${i.text}|${i.priority}|${i.pinned}`).join('\n');
+        prevCardIdeas.set(categoryName, fingerprint);
     }
 
     function appendAddIdeaButton(container, categoryName) {
