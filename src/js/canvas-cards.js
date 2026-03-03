@@ -178,7 +178,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         if (!container) return;
 
         const bodyEl = cardEl.querySelector('.canvas-card__body');
-        const savedScroll = bodyEl ? bodyEl.scrollTop : 0;
+        const savedScrollTop = bodyEl ? bodyEl.scrollTop : 0;
 
         // Cleanup previous swipe gestures
         cleanupCardSwipe(cardEl);
@@ -286,9 +286,9 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         // "+ Add Idea" button at bottom of list
         appendAddIdeaButton(container, categoryName);
 
-        // Restore scroll position after re-render
-        if (bodyEl && savedScroll > 0) {
-            bodyEl.scrollTop = savedScroll;
+        // Restore scroll position after re-render (defer one frame so layout is committed)
+        if (bodyEl && savedScrollTop > 0) {
+            requestAnimationFrame(() => { bodyEl.scrollTop = savedScrollTop; });
         }
     }
 
