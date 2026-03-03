@@ -14,6 +14,7 @@ import { setIdeaArchived, setIdeaPinned, deleteIdea, updateIdeaText, updateIdeaP
 import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
 import { updateNoteCount } from './thread-notes.js';
 import { showToast } from '../lib/toast.js';
+import { showConfirmDialog } from '../lib/confirm-dialog.js';
 
 const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
@@ -37,6 +38,8 @@ export function createCardManager(surfaceEl, engine, options = {}) {
     const resizeStates = new WeakMap();
     let selectionManager = null;
     let focusedCard = null;
+    const LONG_PRESS_MS = 450;
+    const LONG_PRESS_MOVE_TOLERANCE = 10;
 
     function focusCard(cardEl) {
         if (focusedCard === cardEl) return;
@@ -47,6 +50,35 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
     function unfocusCard() {
         if (!focusedCard) return;
+
+        // Close any open inline editor before removing focus
+        const editor = focusedCard.querySelector('.inline-edit');
+        if (editor) {
+            const cancelBtn = editor.querySelector('.inline-edit__cancel');
+            if (cancelBtn) {
+                cancelBtn.click();
+            } else {
+                // Fallback: manually restore the hidden idea-text and remove editor
+                const textEl = editor.previousElementSibling;
+                if (textEl && textEl.classList.contains('idea-text')) textEl.hidden = false;
+                editor.remove();
+            }
+        }
+
+        // Close any open add-idea input, mirroring closeInput() in openAddIdeaInput
+        const addRow = focusedCard.querySelector('.canvas-card__add-idea');
+        if (addRow && addRow.classList.contains('is-editing')) {
+            // Find the categoryName from the card's dataset to re-attach the click handler
+            const categoryName = focusedCard.dataset.category || '';
+            addRow.classList.remove('is-editing');
+            addRow.innerHTML = '<button type="button" class="canvas-card__add-btn">+ Add idea</button>';
+            const btn = addRow.querySelector('.canvas-card__add-btn');
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openAddIdeaInput(addRow, categoryName);
+            });
+        }
+
         focusedCard.classList.remove('is-focused');
         focusedCard = null;
     }
@@ -62,6 +94,9 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         el.className = 'canvas-card';
         el.dataset.category = categoryName;
         el.style.transform = `translate(${x}px, ${y}px)`;
+        el.setAttribute('role', 'region');
+        el.setAttribute('aria-label', `${categoryName} category`);
+        el.setAttribute('tabindex', '0');
 
         const width = savedWidth || DEFAULT_WIDTH;
         el.style.width = `${width}px`;
@@ -70,7 +105,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
         el.innerHTML = `
             <div class="canvas-card__header">
-                <span class="canvas-card__color ${escapeHtml(appearance.classes)}" ${appearance.style ? `style="${escapeHtml(appearance.style)}"` : ''}></span>
+                <span class="canvas-card__color ${escapeHtml(appearance.classes)}" ${appearance.style ? `style="${escapeHtml(appearance.style)}"` : ''} aria-hidden="true"></span>
                 <span class="canvas-card__title">${escapeHtml(categoryName)}</span>
                 <button type="button" class="canvas-card__remove" aria-label="Remove ${escapeHtml(categoryName)} from canvas">&times;</button>
             </div>
@@ -79,6 +114,15 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             </div>
             <div class="canvas-card__resize-handle canvas-card__resize-handle--se" data-resize="se"></div>
         `;
+
+        // Show focus ring as soon as the user interacts (pointer or keyboard)
+        const ensureFocused = (event) => {
+            if (isFocused(el)) return;
+            if (event?.target?.closest('.canvas-card__remove')) return;
+            focusCard(el);
+        };
+        el.addEventListener('pointerdown', ensureFocused, { capture: true });
+        el.addEventListener('focusin', ensureFocused);
 
         // Apply saved body height
         const bodyEl = el.querySelector('.canvas-card__body');
@@ -111,6 +155,9 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             focusCard(el);
         });
 
+        // Long-press on touch to toggle selection for group moves (mobile)
+        attachLongPressSelection(el);
+
         surfaceEl.appendChild(el);
         return el;
     }
@@ -130,6 +177,9 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         const container = cardEl.querySelector('.canvas-card__ideas');
         if (!container) return;
 
+        const bodyEl = cardEl.querySelector('.canvas-card__body');
+        const savedScroll = bodyEl ? bodyEl.scrollTop : 0;
+
         // Cleanup previous swipe gestures
         cleanupCardSwipe(cardEl);
 
@@ -144,7 +194,6 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
         if (filtered.length === 0) {
             container.innerHTML = '<p class="canvas-card__empty">No ideas yet</p>';
-            return;
         }
 
         filtered.forEach(idea => {
@@ -189,7 +238,8 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             },
             onDelete: async (row, ideaId) => {
                 if (!ideaId) return;
-                if (!confirm('Delete this idea permanently?')) return;
+                const confirmed = await showConfirmDialog('Delete this idea permanently?');
+                if (!confirmed) return;
                 row.style.opacity = '0.5';
                 row.style.pointerEvents = 'none';
                 try {
@@ -235,6 +285,11 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
         // "+ Add Idea" button at bottom of list
         appendAddIdeaButton(container, categoryName);
+
+        // Restore scroll position after re-render
+        if (bodyEl && savedScroll > 0) {
+            bodyEl.scrollTop = savedScroll;
+        }
     }
 
     function appendAddIdeaButton(container, categoryName) {
@@ -255,7 +310,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         if (addRow.classList.contains('is-editing')) return;
         addRow.classList.add('is-editing');
         addRow.innerHTML = `
-            <textarea class="canvas-card__add-input" placeholder="New idea..." rows="2"></textarea>
+            <textarea class="canvas-card__add-input" placeholder="New idea..." rows="2" aria-label="New idea for ${escapeHtml(categoryName)}"></textarea>
             <div class="canvas-card__add-actions">
                 <button type="button" class="canvas-card__add-save">Add</button>
                 <button type="button" class="canvas-card__add-cancel">Cancel</button>
@@ -360,7 +415,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 <div class="idea-footer">
                     <div class="idea-actions">
                         <button type="button" class="idea-pin${idea.pinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${!!idea.pinned}" aria-pressed="${!!idea.pinned}" aria-label="${idea.pinned ? 'Unpin idea' : 'Pin idea'}">${PIN_ICON}</button>
-                        <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Toggle notes">${THREAD_ICON}</button>
+                        <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Thread notes">${THREAD_ICON}</button>
                     </div>
                 </div>
             </div>
@@ -406,6 +461,12 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
                 dot.dataset.priority = next;
                 dot.textContent = PRIORITY_BADGES[next] || '⚫';
+
+                const nextTitle = next
+                    ? `${next.charAt(0).toUpperCase() + next.slice(1)} priority - click to change`
+                    : 'No priority - click to set';
+                dot.setAttribute('aria-label', nextTitle);
+                dot.title = nextTitle;
 
                 const bubble = dot.closest('.idea-bubble');
                 if (bubble) {
@@ -458,7 +519,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         const editor = document.createElement('div');
         editor.className = 'inline-edit';
         editor.innerHTML = `
-            <textarea class="inline-edit__input" rows="3">${escapeHtml(originalText)}</textarea>
+            <textarea class="inline-edit__input" rows="3" aria-label="Edit idea text">${escapeHtml(originalText)}</textarea>
             <div class="inline-edit__actions">
                 <button type="button" class="inline-edit__save" data-save-idea="${ideaId}">Save</button>
                 <button type="button" class="inline-edit__cancel" data-cancel-edit>Cancel</button>
@@ -550,7 +611,9 @@ export function createCardManager(surfaceEl, engine, options = {}) {
         if (!headerEl) return;
 
         const ds = {
+            isPointerDown: false,
             isDragging: false,
+            didDrag: false,
             pointerId: null,
             startX: 0,
             startY: 0,
@@ -565,20 +628,21 @@ export function createCardManager(surfaceEl, engine, options = {}) {
 
             e.stopPropagation(); // prevent canvas pan/marquee
 
-            // If card is not focused, focus it but don't start drag
-            if (!isFocused(cardEl)) {
-                focusCard(cardEl);
-                return;
-            }
-
-            // Card is focused — proceed with drag as normal
             // If part of a multi-selection, delegate to group drag
             if (selectionManager && selectionManager.startGroupDrag(e, cardEl)) {
+                ds.isPointerDown = false;
                 ds.isDragging = false; // group drag takes over
+                ds.didDrag = false;
+                ds.pointerId = null;
                 return;
             }
 
-            ds.isDragging = true;
+            const alreadyFocused = isFocused(cardEl);
+            if (!alreadyFocused) {
+                focusCard(cardEl);
+            }
+
+            ds.isPointerDown = true;
             ds.pointerId = e.pointerId;
             ds.startX = e.clientX;
             ds.startY = e.clientY;
@@ -586,9 +650,16 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             const pos = parseTranslate(cardEl);
             ds.cardStartX = pos.x;
             ds.cardStartY = pos.y;
+            ds.didDrag = false;
 
-            headerEl.setPointerCapture(e.pointerId);
-            cardEl.classList.add('is-dragging');
+            // If already focused, allow immediate drag; otherwise wait for small move
+            if (alreadyFocused) {
+                ds.isDragging = true;
+                headerEl.setPointerCapture(e.pointerId);
+                cardEl.classList.add('is-dragging');
+            } else {
+                ds.isDragging = false;
+            }
         });
 
         headerEl.addEventListener('pointermove', (e) => {
@@ -597,12 +668,24 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 selectionManager.handleGroupDragMove(e);
                 return;
             }
-            if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+            if (!ds.isPointerDown || e.pointerId !== ds.pointerId) return;
+
+            if (!ds.isDragging) {
+                const moveThreshold = 6;
+                if (Math.abs(e.clientX - ds.startX) > moveThreshold || Math.abs(e.clientY - ds.startY) > moveThreshold) {
+                    ds.isDragging = true;
+                    headerEl.setPointerCapture(e.pointerId);
+                    cardEl.classList.add('is-dragging');
+                } else {
+                    return;
+                }
+            }
 
             const zoom = engine.getState().zoom;
             const dx = (e.clientX - ds.startX) / zoom;
             const dy = (e.clientY - ds.startY) / zoom;
             cardEl.style.transform = `translate(${ds.cardStartX + dx}px, ${ds.cardStartY + dy}px)`;
+            ds.didDrag = true;
         });
 
         headerEl.addEventListener('pointerup', (e) => {
@@ -611,26 +694,36 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 selectionManager.finishGroupDrag();
                 return;
             }
-            if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+            if (!ds.isPointerDown || e.pointerId !== ds.pointerId) return;
+            ds.isPointerDown = false;
 
-            const pos = parseTranslate(cardEl);
-            const snapped = engine.snapToGrid(pos.x, pos.y);
-            cardEl.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`;
+            if (ds.isDragging) {
+                const pos = parseTranslate(cardEl);
+                const snapped = engine.snapToGrid(pos.x, pos.y);
+                cardEl.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`;
 
-            try { headerEl.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-            cardEl.classList.remove('is-dragging');
-            ds.isDragging = false;
+                try { headerEl.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+                cardEl.classList.remove('is-dragging');
+                ds.isDragging = false;
+                ds.pointerId = null;
+
+                options.onCardMoved?.(cardEl.dataset.category, snapped.x, snapped.y);
+                return;
+            }
+
             ds.pointerId = null;
-
-            options.onCardMoved?.(cardEl.dataset.category, snapped.x, snapped.y);
+            ds.didDrag = false;
         });
 
         headerEl.addEventListener('pointercancel', (e) => {
-            if (!ds.isDragging) return;
-            try { headerEl.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-            cardEl.classList.remove('is-dragging');
+            ds.isPointerDown = false;
+            if (ds.isDragging) {
+                try { headerEl.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+                cardEl.classList.remove('is-dragging');
+            }
             ds.isDragging = false;
             ds.pointerId = null;
+            ds.didDrag = false;
         });
     }
 
@@ -732,6 +825,56 @@ export function createCardManager(surfaceEl, engine, options = {}) {
     function destroy() {
         const cards = surfaceEl.querySelectorAll('.canvas-card');
         cards.forEach(cardEl => cleanupCardSwipe(cardEl));
+    }
+
+    function attachLongPressSelection(cardEl) {
+        if (!cardEl) return;
+
+        let timer = null;
+        let startX = 0;
+        let startY = 0;
+
+        const clearTimer = () => {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        };
+
+        cardEl.addEventListener('pointerdown', (e) => {
+            if (!selectionManager) return;
+            if (e.pointerType !== 'touch') return;
+            if (e.target.closest('.canvas-card__remove') || e.target.closest('.canvas-card__resize-handle')) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            clearTimer();
+            timer = setTimeout(() => {
+                timer = null;
+                const alreadySelected = selectionManager.isSelected(cardEl);
+                if (alreadySelected) {
+                    selectionManager.deselectItem?.(cardEl);
+                    showToast('Removed from selection', { timeout: 900 });
+                } else {
+                    selectionManager.selectItem(cardEl);
+                    if (navigator.vibrate) navigator.vibrate(10);
+                    showToast('Selected for group move', { timeout: 900 });
+                }
+            }, LONG_PRESS_MS);
+        });
+
+        cardEl.addEventListener('pointermove', (e) => {
+            if (!timer) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) {
+                clearTimer();
+            }
+        });
+
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt => {
+            cardEl.addEventListener(evt, clearTimer);
+        });
     }
 
     return {
