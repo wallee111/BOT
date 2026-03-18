@@ -16,7 +16,8 @@ import {
     orderBy,
     limit,
     enableIndexedDbPersistence,
-    enableMultiTabIndexedDbPersistence
+    enableMultiTabIndexedDbPersistence,
+    Timestamp
 } from 'firebase/firestore';
 import { app } from './firebase.js';
 import { HEX_COLOR_PATTERN, normalizeCategories } from './utils.js';
@@ -33,7 +34,7 @@ const LOCAL_MUTATION_QUEUE_KEY = 'ideas_mutation_queue_v1';
 // Cache TTL configuration (in milliseconds)
 const CACHE_TTL = {
     IDEAS: 5 * 60 * 1000,              // 5 minutes
-    CATEGORY_SETTINGS: 10 * 60 * 1000,  // 10 minutes
+    CATEGORY_SETTINGS: 30 * 60 * 1000,  // 30 minutes (extended — categories change rarely)
 };
 const MUTATION_QUEUE_EVENT = 'ideasMutationQueueChanged';
 
@@ -144,7 +145,11 @@ const categorySettingsCollection = collection(db, 'categorySettings');
 const mutationExecutors = {
     saveIdea: async (payload = {}) => {
         if (!payload?.id) return;
-        await setDoc(doc(ideasCollection, payload.id), payload);
+        const firestorePayload = { ...payload };
+        if (typeof firestorePayload.createdAt === 'number') {
+            firestorePayload.createdAt = Timestamp.fromMillis(firestorePayload.createdAt);
+        }
+        await setDoc(doc(ideasCollection, payload.id), firestorePayload);
         perfMonitor.trackWrite(1);
     },
     setIdeaArchived: async ({ id, archived = true }) => {
@@ -399,14 +404,19 @@ function readIdeasFromLocal() {
     }
 }
 
+let _pendingIdeasWrite = null;
 function writeIdeasToLocal(ideas) {
-    try {
-        const normalized = Array.isArray(ideas) ? ideas.map(item => normalizeIdeaObject(item, item?.id)) : [];
-        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(normalized));
-        localStorage.setItem(LOCAL_CACHE_TIMESTAMP_KEY, Date.now().toString());
-    } catch (err) {
-        console.warn('Unable to write to local cache', err);
-    }
+    // Debounce: batch rapid writes within 150ms (e.g. listener fires + mutation in quick succession)
+    clearTimeout(_pendingIdeasWrite);
+    _pendingIdeasWrite = setTimeout(() => {
+        try {
+            const normalized = Array.isArray(ideas) ? ideas.map(item => normalizeIdeaObject(item, item?.id)) : [];
+            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(normalized));
+            localStorage.setItem(LOCAL_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (err) {
+            console.warn('Unable to write to local cache', err);
+        }
+    }, 150);
 }
 
 function normalizePaletteSettings(source) {
@@ -552,7 +562,7 @@ export async function getCategoryPalette({ force = false } = {}) {
         if (firestoreAccess.canFetchCategorySettings) {
             fetchCategorySettingsFromFirestore()
                 .then(firestoreSettings => {
-                    const mergedSettings = { ...firestoreSettings, ...localSettings };
+                    const mergedSettings = { ...localSettings, ...firestoreSettings };
                     categorySettingsCache = normalizePaletteSettings(mergedSettings);
                     writeCategorySettingsToLocal(categorySettingsCache);
                 })
@@ -573,8 +583,8 @@ export async function getCategoryPalette({ force = false } = {}) {
         try {
             const firestoreSettings = await fetchCategorySettingsFromFirestore();
 
-            // Merge Firestore data with local data (local takes precedence)
-            const mergedSettings = { ...firestoreSettings, ...localSettings };
+            // Merge local data with Firestore (Firestore wins as source of truth)
+            const mergedSettings = { ...localSettings, ...firestoreSettings };
 
             // Update local cache with merged data
             categorySettingsCache = normalizePaletteSettings(mergedSettings);
@@ -892,17 +902,9 @@ export function subscribeToIdeas(callback) {
             where('userId', '==', userId)
         );
         unsubscribe = onSnapshot(q, (snapshot) => {
-            const ideas = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                ideas.push({
-                    id: doc.id,
-                    ...data
-                });
-            });
-
-            // Sort in memory by createdAt descending
-            ideas.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            const ideas = snapshot.docs
+                .map(doc => normalizeIdeaObject(doc.data() || {}, doc.id))
+                .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
             // Update cache and localStorage
             ideasCache = ideas;
@@ -1280,10 +1282,11 @@ export async function addNote(ideaId, text) {
     if (!ideaId) throw new Error("Idea ID is required");
     if (!text?.trim()) throw new Error("Note text is required");
 
+    const now = Date.now();
     const noteData = {
         text: text.trim(),
         userId,
-        createdAt: Date.now()
+        createdAt: now
     };
 
     // Optimistic UI: Add to local cache immediately
@@ -1293,9 +1296,9 @@ export async function addNote(ideaId, text) {
     writeNotesToLocal(ideaId, [...currentNotes, optimisticNote]);
 
     try {
-        // Write to Firestore
+        // Write to Firestore with Timestamp
         const coll = collection(db, 'ideas', ideaId, 'comments');
-        const docRef = await addDoc(coll, noteData);
+        const docRef = await addDoc(coll, { ...noteData, createdAt: Timestamp.fromMillis(now) });
 
         // Update local cache with real ID
         const updatedNotes = getNotesFromLocal(ideaId).map(note =>
@@ -1423,6 +1426,7 @@ function normalizeCanvasLayout(data) {
                     x: Number(c.x) || 0,
                     y: Number(c.y) || 0,
                     width: Number(c.width) || 0,
+                    bodyHeight: Number(c.bodyHeight) || 0,
                 }))
                 .filter(c => c.categoryName)
             : [],
@@ -1515,6 +1519,52 @@ export function subscribeToCanvasLayout(callback) {
         }, (error) => {
             console.warn('[Canvas] Layout subscription error', error);
         });
+    });
+
+    return () => unsubscribe();
+}
+
+/**
+ * Subscribe to real-time category settings changes from Firestore.
+ * Keeps localStorage in sync and calls callback with the normalized palette
+ * whenever a remote change is detected. Returns an unsubscribe function.
+ *
+ * @param {function(Object): void} callback - Receives the normalized palette object.
+ * @returns {function(): void} Unsubscribe function.
+ */
+export function subscribeToCategorySettings(callback) {
+    let unsubscribe = () => {};
+
+    getCurrentUserId().then(userId => {
+        if (!userId) {
+            console.warn('[subscribeToCategorySettings] No userId; skipping Firestore subscription.');
+            return;
+        }
+
+        const q = query(categorySettingsCollection, where('userId', '==', userId));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            const settings = {};
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data() || {};
+                // Use the same field priority as fetchCategorySettingsFromFirestore
+                const name = (data.name || data.label || data.category || docSnap.id || '').trim();
+                if (!name) return;
+                const entry = {};
+                const storedColour = typeof data.color === 'string' ? data.color.trim().toLowerCase() : '';
+                if (storedColour) entry.color = storedColour;
+                if (typeof data.visible === 'boolean') entry.visible = data.visible;
+                settings[name] = entry;
+            });
+
+            const normalized = normalizePaletteSettings(settings);
+            categorySettingsCache = normalized;
+            writeCategorySettingsToLocal(normalized);
+            callback(normalized);
+        }, (error) => {
+            console.warn('[subscribeToCategorySettings] Listener error:', error);
+        });
+    }).catch(error => {
+        console.error('[subscribeToCategorySettings] Error getting user ID:', error);
     });
 
     return () => unsubscribe();

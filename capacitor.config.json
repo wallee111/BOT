@@ -19,7 +19,8 @@
       "www.googleapis.com",
       "securetoken.googleapis.com",
       "identitytoolkit.googleapis.com",
-      "firebaseinstallations.googleapis.com"
+      "firebaseinstallations.googleapis.com",
+      "bucket0f-thoughts.firebaseapp.com"
     ]
   },
   "plugins": {

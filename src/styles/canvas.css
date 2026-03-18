@@ -63,6 +63,12 @@
     outline-offset: 2px;
 }
 
+.canvas-zoom-overlay__btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 .canvas-zoom-overlay__level {
     font-size: 0.75rem;
     font-weight: 600;
@@ -319,10 +325,10 @@
     overflow: hidden;
     position: relative;
     cursor: grab;
-    background-color: var(--bot-bg-dark);
+    background-color: var(--md-sys-color-surface-dim);
     background-image: radial-gradient(circle, var(--md-sys-color-outline-variant) 1px, transparent 1px);
     background-size: 40px 40px;
-    touch-action: pan-x pan-y; /* Panning only, no pinch zoom (use zoom buttons instead) */
+    touch-action: none; /* Engine handles all pan/pinch via pointer events; browser default gestures suppressed */
 }
 
 /* Desktop: default cursor is pointer (select mode), not grab */
@@ -355,7 +361,7 @@
 .canvas-marquee {
     position: absolute;
     border: 1.5px solid var(--md-sys-color-primary);
-    background: rgba(255, 202, 40, 0.08);
+    background: var(--md-sys-color-primary-container);
     border-radius: 4px;
     pointer-events: none;
     z-index: 150;
@@ -382,6 +388,43 @@
     transform-origin: 0 0;
 }
 
+/* ── Canvas Empty State ──────────────────────────────────────── */
+
+.canvas-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.canvas-empty-state__headline {
+    font-size: var(--md-sys-typescale-title-medium-size);
+    font-weight: var(--md-sys-typescale-title-medium-weight);
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+    opacity: 0.85;
+}
+
+.canvas-empty-state__hint {
+    font-size: var(--md-sys-typescale-body-medium-size);
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+    opacity: 0.7;
+}
+
+.canvas-empty-state__hint strong {
+    color: var(--md-sys-color-primary);
+    font-weight: 600;
+    opacity: 1;
+}
+
 /* ── Category Cards ──────────────────────────────────────────── */
 
 .canvas-card {
@@ -406,6 +449,33 @@
 
 .canvas-card.is-resizing {
     transition: none;
+}
+
+/* Focused state — card is interactive, shows primary border */
+.canvas-card.is-focused {
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+    border-radius: 12px;
+    z-index: 10;
+}
+
+/* Unfocused cards on canvas suppress pointer events on interactive children */
+.canvas-card:not(.is-focused) .canvas-card__body {
+    pointer-events: none;
+}
+
+.canvas-card:not(.is-focused) .canvas-card__resize-handle {
+    pointer-events: none;
+}
+
+/* Unfocused card header: pointer cursor instead of grab (indicates "tap to focus") */
+.canvas-card:not(.is-focused) .canvas-card__header {
+    cursor: pointer;
+}
+
+/* Keep remove button always accessible even when unfocused */
+.canvas-card:not(.is-focused) .canvas-card__remove {
+    pointer-events: auto;
 }
 
 /* Header is the drag handle — immediate grab, no hold delay */
@@ -479,7 +549,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 6px;
 }
 
 /* Override idea-bubble styles inside canvas cards for a compact fit */
@@ -619,8 +689,8 @@
 
 .canvas-card__add-input {
     width: 100%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: 8px;
     padding: 8px 10px;
     color: inherit;
@@ -899,4 +969,60 @@
     .canvas-thread-panel {
         width: 100vw;
     }
+}
+
+/* ── Fix 7: Touch targets on mobile (WCAG 2.5.5 — 44×44px minimum) ──── */
+
+@media (max-width: 1023px) {
+    .canvas-card__remove {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-zoom-overlay__btn {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-header__delete {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-card__resize-handle--se {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* ── Fix 8: Focus-visible styles for opacity-hidden buttons ──── */
+
+.canvas-card__remove:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+}
+
+.canvas-header__delete:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+}
+
+/* Show remove button and resize handle when card is focused */
+.canvas-card.is-focused .canvas-card__remove {
+    opacity: 1;
+}
+
+.canvas-card.is-focused .canvas-card__resize-handle {
+    opacity: 0.5;
 }

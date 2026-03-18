@@ -3,7 +3,6 @@ import "../styles/style.v1.css";
 import {
     saveIdea,
     getCategories,
-    getIdeas,
     subscribeToIdeas,
     setIdeaArchived,
     setIdeaHidden,
@@ -13,7 +12,8 @@ import {
     getCategoriesByRecentUsage,
     updateIdeaPriority,
     deleteIdea,
-    updateIdeaText
+    updateIdeaText,
+    subscribeToCategorySettings,
 } from '../lib/storage.js';
 import {
     escapeHtml,
@@ -23,11 +23,12 @@ import {
     extractTags,
     formatTextContent
 } from '../lib/utils.js';
-import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
+import { ensureAuthSession, auth } from '../lib/auth.js';
 import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes } from './thread-notes.js';
 import { showToast } from '../lib/toast.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
 import { initSwipeGestures } from './idea-bubble.js';
+import { showConfirmDialog } from '../lib/confirm-dialog.js';
 
 // --- Constants ---
 const CATEGORY_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -77,59 +78,75 @@ let state = {
 
 // --- Initialization ---
 async function initialize() {
-    console.log('[index] Initializing page, checking auth...');
+    console.log('[index] Initializing page...');
 
+    // 1. Render cached data IMMEDIATELY (before auth) for instant first paint
+    //    Only show cache if Firebase has a current user (prevents cross-user data leak)
+    const cachedIdeas = auth.currentUser ? JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]') : [];
+    const cachedPalette = auth.currentUser ? JSON.parse(localStorage.getItem('category_settings_v1') || '{}') : {};
+    if (cachedIdeas.length) {
+        state.categoryPalette = cachedPalette;
+        state.allIdeas = cachedIdeas;
+        renderDashboard(cachedIdeas);
+        // Populate category list from cache
+        const cachedCats = new Set();
+        cachedIdeas.forEach(i => {
+            const cats = i.categories || (i.category ? [i.category] : []);
+            cats.forEach(c => { if (c?.trim()) cachedCats.add(c.trim()); });
+        });
+        state.availableCategories = Array.from(cachedCats);
+        console.log('[index] Rendered cached data instantly');
+    }
+
+    // 2. Auth check (runs while cached UI is already visible)
     try {
-        // First, ensure auth session is established and user must be logged in
         const user = await ensureAuthSession({ requireAuth: true });
-        console.log('[index] Auth check result:', user?.email || 'no user');
         if (!user) {
-            console.log('[index] No user found, clearing cache and redirecting to signin.html');
-            // Clear any stale cache that might be keeping the user on the dashboard
+            console.log('[index] No user found, redirecting to signin.html');
             try {
                 localStorage.removeItem('ideas_v1_cache');
                 localStorage.removeItem('category_settings_v1');
                 localStorage.removeItem('category_usage_v1');
                 localStorage.removeItem('canvas_layouts');
-            } catch (e) {
-                console.log('[index] Error clearing localStorage:', e);
-            }
+            } catch (e) { /* ignore */ }
             window.location.href = 'signin.html';
             return;
         }
         console.log('[index] User authenticated:', user.email);
     } catch (error) {
         console.error('[index] Auth required but failed:', error);
-        console.log('[index] Redirecting to signin.html due to auth error');
-        // Clear cache on auth error too
         try {
             localStorage.removeItem('ideas_v1_cache');
             localStorage.removeItem('category_settings_v1');
             localStorage.removeItem('category_usage_v1');
             localStorage.removeItem('canvas_layouts');
-        } catch (e) {
-            console.log('[index] Error clearing localStorage:', e);
-        }
+        } catch (e) { /* ignore */ }
         window.location.href = 'signin.html';
         return;
     }
 
     initThreadNotes();
 
-    await Promise.all([
-        refreshCategoryPalette(),
-        updateCategoryList(),
-        loadExistingIdeas()
-    ]);
+    // 3. Refresh palette in background (don't block on it)
+    refreshCategoryPalette().catch(console.error);
 
-    // Real-time listener
+    // 4. Subscribe to real-time listener as single source of truth
+    // This replaces the old pattern of getIdeas() + subscribeToIdeas() (double fetch)
     const unsubscribe = subscribeToIdeas((ideas) => {
         state.allIdeas = ideas;
+        updateCategoryList().catch(console.error);
         renderDashboard(ideas);
+    });
+
+    // 5. Real-time category settings listener — keeps palette current across devices.
+    const unsubCategorySettings = subscribeToCategorySettings((palette) => {
+        state.categoryPalette = palette;
+        if (state.allIdeas.length) renderDashboard(state.allIdeas);
     });
 
     window.addEventListener('beforeunload', () => {
         unsubscribe();
+        unsubCategorySettings();
         cleanupThreadNotes();
     });
 }
@@ -227,13 +244,12 @@ async function handleIdeaSave(e) {
     try {
         await saveIdea(idea);
         if (idea.category) trackCategoryUsage(idea.category);
-        const manualVal = categoryNew?.value?.trim() || '';
         textInput.value = '';
         textInput.style.height = 'auto';
         if (categoryNew) categoryNew.value = '';
         if (prioritySelect) prioritySelect.value = '';
         updateCategoryLabel();
-        await Promise.all([loadExistingIdeas({ force: true }), updateCategoryList(manualVal || idea.category), refreshCategoryPalette()]);
+        // No need to force-refetch — the snapshot listener will deliver the update
         showToast('Saved!', { tone: 'success', timeout: 1200 });
         closeCaptureOverlay();
     } catch (err) {
@@ -465,6 +481,9 @@ function renderDashboard(ideas) {
     const pinnedIdeas = activePool.filter(i => i.pinned);
     const hiddenIdeas = ordered.filter(i => !i.archived && i.hidden);
 
+    // Show/hide first-run empty state
+    renderFirstRunEmpty(ideas);
+
     renderPinnedSection(pinnedIdeas);
 
     // Pick resurface idea if we don't have one yet
@@ -472,6 +491,29 @@ function renderDashboard(ideas) {
     renderResurfaceSection();
 
     renderHiddenSection(hiddenIdeas);
+}
+
+function renderFirstRunEmpty(ideas) {
+    const dashboard = document.getElementById('dashboard');
+    if (!dashboard) return;
+
+    const existingEmpty = document.getElementById('firstRunEmpty');
+
+    if (ideas.length === 0) {
+        if (!existingEmpty) {
+            const emptyEl = document.createElement('div');
+            emptyEl.id = 'firstRunEmpty';
+            emptyEl.className = 'dash-empty dash-empty--hero';
+            emptyEl.setAttribute('aria-live', 'polite');
+            emptyEl.innerHTML = `
+                <p class="dash-empty__headline">No ideas yet</p>
+                <p class="dash-empty__hint">Tap <strong>+</strong> to capture your first thought.</p>
+            `;
+            dashboard.prepend(emptyEl);
+        }
+    } else {
+        existingEmpty?.remove();
+    }
 }
 
 function renderPinnedSection(pinnedIdeas) {
@@ -623,7 +665,7 @@ function buildIdeaElement(idea, { hiddenView = false } = {}) {
             <div class="idea-footer">
                 <div class="idea-actions">
                     <button type="button" class="idea-pin${idea.pinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${idea.pinned}" aria-pressed="${idea.pinned}" aria-label="${idea.pinned ? 'Unpin idea' : 'Pin idea'}">${pinIcon}</button>
-                    <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Toggle notes">${threadIcon}</button>
+                    <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Thread notes">${threadIcon}</button>
                 </div>
                 <button type="button" class="idea-hide" data-id="${idea.id}" data-action="${hiddenView ? 'unhide' : 'hide'}" aria-label="${hiddenView ? 'Unhide idea' : 'Hide idea'}">${hiddenView ? 'Unhide' : 'Hide'}</button>
             </div>
@@ -717,7 +759,8 @@ function renderIdeaList(container, list, { hiddenView = false } = {}) {
         onEdit: (row, ideaId) => openInlineEditor(row, ideaId),
         onDelete: async (row, ideaId) => {
             if (!ideaId) return;
-            if (!confirm('Delete this idea permanently?')) return;
+            const confirmed = await showConfirmDialog('Delete this idea permanently?');
+            if (!confirmed) return;
             row.style.opacity = '0.5';
             row.style.pointerEvents = 'none';
             try {
@@ -829,7 +872,7 @@ const categoryDropdown = createCategoryDropdownController({
     findIdea: (id) => state.allIdeas.find(i => i.id === id),
     getIdeaCategories: (idea) => getIdeaCategoriesList(idea),
     getAvailableCategories: () => state.availableCategories,
-    onCategoriesChanged: () => Promise.all([loadExistingIdeas({ force: true }), updateCategoryList(), refreshCategoryPalette({ force: true })]),
+    onCategoriesChanged: () => Promise.all([updateCategoryList(), refreshCategoryPalette({ force: true })]),
     collator: CATEGORY_COLLATOR,
 });
 
@@ -868,10 +911,7 @@ async function updateCategoryList() {
     updateCategoryLabel();
 }
 
-async function loadExistingIdeas(options = {}) {
-    state.allIdeas = await getIdeas(options);
-    renderDashboard(state.allIdeas);
-}
+// loadExistingIdeas removed — snapshot listener is now the single source of truth
 
 // --- Event Delegation for Idea Interactions ---
 
@@ -885,7 +925,6 @@ document.addEventListener('click', (e) => {
         const isPinned = pinBtn.dataset.pinned === 'true';
         pinBtn.disabled = true;
         setIdeaPinned(id, !isPinned)
-            .then(() => loadExistingIdeas({ force: true }))
             .catch(err => console.error('Unable to pin', err))
             .finally(() => { pinBtn.disabled = false; });
         return;
@@ -898,7 +937,6 @@ document.addEventListener('click', (e) => {
         const action = hideBtn.dataset.action;
         hideBtn.disabled = true;
         setIdeaHidden(id, action === 'hide')
-            .then(() => loadExistingIdeas({ force: true }))
             .catch(err => console.error('Unable to hide', err))
             .finally(() => { hideBtn.disabled = false; });
         return;
@@ -997,11 +1035,36 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-        loadExistingIdeas({ force: true }).catch(console.error);
+        // Ideas arrive via snapshot listener — only refresh palette & categories
         updateCategoryList().catch(console.error);
         refreshCategoryPalette({ force: true }).catch(console.error);
     }
 });
 
-window.addEventListener('categoryDeleted', () => Promise.all([updateCategoryList(), loadExistingIdeas({ force: true }), refreshCategoryPalette({ force: true })]));
+window.addEventListener('categoryDeleted', () => Promise.all([updateCategoryList(), refreshCategoryPalette({ force: true })]));
 window.addEventListener('categoryPaletteUpdated', () => refreshCategoryPalette({ force: true }));
+
+// --- Theme Toggle ---
+const THEME_KEY = 'bot_theme_v1';
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+function initThemeToggle() {
+    // Restore saved preference, default to dark
+    const saved = localStorage.getItem(THEME_KEY) || 'dark';
+    applyTheme(saved);
+
+    // Wire up both buttons — sidebar (desktop) + top-bar (mobile)
+    const toggle = () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+    };
+
+    document.getElementById('themeToggle')?.addEventListener('click', toggle);
+    document.getElementById('themeToggleSidebar')?.addEventListener('click', toggle);
+}
+
+initThemeToggle();
