@@ -646,8 +646,20 @@ function wireEvents() {
         execToolbarCommand(btn.dataset.cmd);
     });
 
-    // Keyboard shortcuts: Ctrl/Cmd+B, Ctrl/Cmd+I
+    // Keyboard shortcuts: Ctrl/Cmd+B, Ctrl/Cmd+I, Tab indent
     notesEditorContent.addEventListener('keydown', (e) => {
+        // Tab / Shift+Tab → indent / outdent (desktop only)
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                document.execCommand('outdent', false, null);
+            } else {
+                document.execCommand('indent', false, null);
+            }
+            scheduleSave();
+            return;
+        }
+
         const mod = e.ctrlKey || e.metaKey;
         if (!mod) return;
         if (e.key === 'b' || e.key === 'B') {
