@@ -75,17 +75,37 @@ Add a full-featured Notes page to the Bucket of Thoughts app, replicating core A
 | `notes_v1_cache` | Cached notes array |
 
 ### Firestore Security Rules
-Follow existing `ownsResource()` / `createsOwnResource()` pattern:
+Follow existing `ownsResource(resource)` / `createsOwnResource(resource)` pattern with field validation:
 
 ```
 match /notes/{noteId} {
-  allow read, update, delete: if request.auth != null && ownsResource();
-  allow create: if request.auth != null && createsOwnResource();
+  allow create: if createsOwnResource(request.resource)
+    && validStringLength(request.resource.data.title, 500)
+    && validStringLength(request.resource.data.content, 100000)
+    && request.resource.data.keys().hasAll(['userId', 'title', 'content', 'createdAt', 'updatedAt'])
+    && validTimestamp(request.resource.data.createdAt)
+    && validTimestamp(request.resource.data.updatedAt);
+  allow read: if ownsResource(resource);
+  allow delete: if ownsResource(resource);
+  allow update: if ownsResource(resource)
+    && request.resource.data.userId == resource.data.userId
+    && validStringLength(request.resource.data.title, 500)
+    && validStringLength(request.resource.data.content, 100000)
+    && validTimestamp(request.resource.data.updatedAt);
 }
 
 match /noteFolders/{folderId} {
-  allow read, update, delete: if request.auth != null && ownsResource();
-  allow create: if request.auth != null && createsOwnResource();
+  allow create: if createsOwnResource(request.resource)
+    && validStringLength(request.resource.data.name, 100)
+    && request.resource.data.keys().hasAll(['userId', 'name', 'sortOrder', 'createdAt', 'updatedAt'])
+    && validTimestamp(request.resource.data.createdAt)
+    && validTimestamp(request.resource.data.updatedAt);
+  allow read: if ownsResource(resource);
+  allow delete: if ownsResource(resource);
+  allow update: if ownsResource(resource)
+    && request.resource.data.userId == resource.data.userId
+    && validStringLength(request.resource.data.name, 100)
+    && validTimestamp(request.resource.data.updatedAt);
 }
 ```
 
@@ -194,19 +214,22 @@ User types → debounce(1000ms) → update localStorage → fire Firestore write
 | `signin.html` | Add "Notes" to sidebar nav + bottom nav |
 
 ### Storage Functions (added to `storage.js`)
-```javascript
-// Notes
-subscribeToNotes(callback)        // Real-time listener, returns unsubscribe fn
-saveNote(note)                    // Create or update (upsert)
-deleteNote(noteId)                // Delete from Firestore + cache
 
-// Folders
-subscribeToNoteFolders(callback)  // Real-time listener, returns unsubscribe fn
-saveNoteFolder(folder)            // Create or update (upsert)
-deleteNoteFolder(folderId)        // Delete folder, reassign notes to null
+**Note:** `subscribeToNotes` and `deleteNote` already exist in `storage.js` for idea thread comments (`ideas/{id}/comments` subcollection). To avoid naming collisions, all new Notes feature functions use the `Page` prefix:
+
+```javascript
+// Page Notes
+subscribeToPageNotes(callback)        // Real-time listener, returns unsubscribe fn
+savePageNote(note)                    // Create or update (upsert)
+deletePageNote(noteId)                // Delete from Firestore + cache
+
+// Note Folders
+subscribeToNoteFolders(callback)      // Real-time listener, returns unsubscribe fn
+saveNoteFolder(folder)                // Create or update (upsert)
+deleteNoteFolder(folderId)            // Delete folder, reassign notes to null
 ```
 
-All functions follow existing patterns: optimistic localStorage update → Firestore write → mutation queue for offline.
+All functions follow existing patterns: optimistic localStorage update → Firestore write. **Note:** The existing mutation queue is ideas-specific (`ideas_mutation_queue_v1`). Notes will need either a parallel mutation queue (`notes_mutation_queue_v1`) or the existing queue generalized to support multiple entity types.
 
 ---
 
