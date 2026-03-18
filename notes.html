@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Notes - BOT</title>
+    <meta name="theme-color" content="#ffca28">
+    <link rel="manifest" href="/manifest.json">
+    <!-- Inline: apply saved theme before paint to avoid flash -->
+    <script src="/theme-init.js"></script>
+    <script src="/sw-register.js" defer></script>
+</head>
+
+<body>
+    <a href="#notesMainContent" class="skip-link">Skip to main content</a>
+    <main class="app-container">
+        <!-- Desktop Sidebar -->
+        <aside class="desktop-sidebar" aria-label="Main Navigation">
+            <div class="sidebar-header">
+                <h2>BOT</h2>
+                <!-- Theme Toggle (desktop sidebar) -->
+                <button type="button" id="themeToggleSidebar" class="theme-toggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+                    <svg class="theme-toggle__sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="theme-toggle__moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html">Capture</a>
+                <a href="review.html">Review</a>
+                <a href="categories.html">Categories</a>
+                <a href="canvas.html">Canvas</a>
+                <a href="notes.html" class="is-active" aria-current="page">Notes</a>
+                <a href="account.html">Account</a>
+            </nav>
+            <div class="sidebar-footer">
+                <div id="sidebarSync" class="sync-indicator"></div>
+            </div>
+        </aside>
+
+        <!-- Three-panel notes layout -->
+        <div id="notesMainContent" class="main-content-wrap notes-layout" tabindex="-1">
+
+            <!-- Panel 1: Folders -->
+            <div class="notes-folders-panel" id="notesFoldersPanel" data-mobile-panel="folders">
+                <div class="notes-folders-panel__header">
+                    <h2 class="notes-panel-title">Folders</h2>
+                    <button type="button" class="notes-icon-btn" id="newFolderBtn" aria-label="New folder" title="New folder">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            <line x1="12" y1="11" x2="12" y2="17"/>
+                            <line x1="9" y1="14" x2="15" y2="14"/>
+                        </svg>
+                    </button>
+                </div>
+                <ul class="notes-folder-list" id="notesFolderList" role="listbox" aria-label="Folders">
+                    <!-- Folder items rendered dynamically -->
+                </ul>
+            </div>
+
+            <!-- Panel 2: Notes list -->
+            <div class="notes-list-panel" id="notesListPanel" data-mobile-panel="list">
+                <div class="notes-list-panel__header">
+                    <button type="button" class="notes-back-btn" id="notesListBackBtn" aria-label="Back to folders">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </button>
+                    <h2 class="notes-panel-title" id="notesListTitle">All Notes</h2>
+                    <button type="button" class="notes-icon-btn" id="newNoteBtn" aria-label="New note" title="New note">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="notes-search-wrap">
+                    <svg class="notes-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="search" class="notes-search-input" id="notesSearchInput" placeholder="Search notes…" aria-label="Search notes">
+                </div>
+                <ul class="notes-list" id="notesList" role="listbox" aria-label="Notes">
+                    <!-- Note preview cards rendered dynamically -->
+                </ul>
+            </div>
+
+            <!-- Panel 3: Editor -->
+            <div class="notes-editor-panel" id="notesEditorPanel" data-mobile-panel="editor">
+                <!-- Editor header -->
+                <div class="notes-editor-panel__header">
+                    <button type="button" class="notes-back-btn" id="notesEditorBackBtn" aria-label="Back to notes list">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </button>
+                    <div class="notes-editor-meta" id="notesEditorMeta">
+                        <span class="notes-editor-meta__folder" id="notesEditorFolder"></span>
+                        <span class="notes-editor-meta__date" id="notesEditorDate"></span>
+                    </div>
+                    <div class="notes-editor-actions">
+                        <button type="button" class="notes-icon-btn" id="moveNoteBtn" aria-label="Move to folder" title="Move to folder" aria-haspopup="true" aria-expanded="false">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="notes-icon-btn notes-icon-btn--danger" id="deleteNoteBtn" aria-label="Delete note" title="Delete note">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Formatting toolbar -->
+                <div class="notes-toolbar" id="notesToolbar" role="toolbar" aria-label="Text formatting">
+                    <button type="button" class="notes-toolbar__btn" data-cmd="bold" aria-label="Bold" title="Bold (Ctrl+B)">
+                        <strong>B</strong>
+                    </button>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="italic" aria-label="Italic" title="Italic (Ctrl+I)">
+                        <em>I</em>
+                    </button>
+                    <div class="notes-toolbar__divider" aria-hidden="true"></div>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="h1" aria-label="Heading 1" title="Heading 1">
+                        H1
+                    </button>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="h2" aria-label="Heading 2" title="Heading 2">
+                        H2
+                    </button>
+                    <div class="notes-toolbar__divider" aria-hidden="true"></div>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="ul" aria-label="Bullet list" title="Bullet list">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="9" y1="6" x2="20" y2="6"/>
+                            <line x1="9" y1="12" x2="20" y2="12"/>
+                            <line x1="9" y1="18" x2="20" y2="18"/>
+                            <circle cx="4" cy="6" r="1" fill="currentColor"/>
+                            <circle cx="4" cy="12" r="1" fill="currentColor"/>
+                            <circle cx="4" cy="18" r="1" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="ol" aria-label="Numbered list" title="Numbered list">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="10" y1="6" x2="21" y2="6"/>
+                            <line x1="10" y1="12" x2="21" y2="12"/>
+                            <line x1="10" y1="18" x2="21" y2="18"/>
+                            <path d="M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="notes-toolbar__btn" data-cmd="checklist" aria-label="Checklist" title="Checklist">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="9 11 12 14 22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Editor content area -->
+                <div class="notes-editor-body" id="notesEditorBody">
+                    <div
+                        class="notes-editor-title"
+                        id="notesEditorTitle"
+                        contenteditable="true"
+                        role="textbox"
+                        aria-label="Note title"
+                        aria-multiline="false"
+                        data-placeholder="Untitled"
+                        spellcheck="true"
+                    ></div>
+                    <div
+                        class="notes-editor-content"
+                        id="notesEditorContent"
+                        contenteditable="true"
+                        role="textbox"
+                        aria-label="Note content"
+                        aria-multiline="true"
+                        data-placeholder="Start writing…"
+                        spellcheck="true"
+                    ></div>
+                </div>
+
+                <!-- Save status -->
+                <div class="notes-save-status" id="notesSaveStatus" aria-live="polite" aria-atomic="true"></div>
+
+                <!-- Empty state (shown when no note selected) -->
+                <div class="notes-editor-empty" id="notesEditorEmpty" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="13" y2="17"/>
+                    </svg>
+                    <p>Select a note or create a new one</p>
+                </div>
+            </div>
+
+            <!-- Move-to-folder dropdown (md3-menu pattern) -->
+            <div id="moveFolderMenu" class="md3-menu" hidden role="menu" aria-label="Move note to folder">
+                <div id="moveFolderMenuContent" class="md3-menu__scroll"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="App navigation">
+        <a class="bottom-nav__item" href="index.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Capture</span>
+        </a>
+        <a class="bottom-nav__item" href="review.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+            </svg>
+            <span class="bottom-nav__label">Review</span>
+        </a>
+        <a class="bottom-nav__item" href="canvas.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span class="bottom-nav__label">Canvas</span>
+        </a>
+        <a class="bottom-nav__item is-active" href="notes.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="8" y1="13" x2="16" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <line x1="8" y1="17" x2="13" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span class="bottom-nav__label">Notes</span>
+        </a>
+        <a class="bottom-nav__item" href="account.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" />
+            </svg>
+            <span class="bottom-nav__label">Account</span>
+        </a>
+    </nav>
+
+    <script type="module" src="/src/js/notes.js"></script>
+
+</body>
+
+</html>
