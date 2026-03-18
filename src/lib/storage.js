@@ -30,6 +30,8 @@ const LOCAL_CATEGORY_SETTINGS_KEY = 'category_settings_v1';
 const LOCAL_CATEGORY_SETTINGS_TIMESTAMP_KEY = 'category_settings_v1_ts';
 const LOCAL_CATEGORY_USAGE_KEY = 'category_usage_v1';
 const LOCAL_MUTATION_QUEUE_KEY = 'ideas_mutation_queue_v1';
+const LOCAL_PAGE_NOTES_CACHE_KEY = 'notes_v1_cache';
+const LOCAL_NOTE_FOLDERS_CACHE_KEY = 'note_folders_v1';
 
 // Cache TTL configuration (in milliseconds)
 const CACHE_TTL = {
@@ -141,6 +143,63 @@ try {
 
 const ideasCollection = collection(db, 'ideas');
 const categorySettingsCollection = collection(db, 'categorySettings');
+const notesCollection = collection(db, 'notes');
+const noteFoldersCollection = collection(db, 'noteFolders');
+
+// ── Page Notes cache helpers ────────────────────────────────────
+
+let pageNotesCache = null;
+let noteFoldersCache = null;
+
+function readPageNotesFromLocal() {
+    try {
+        const raw = localStorage.getItem(LOCAL_PAGE_NOTES_CACHE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (error) {
+        console.warn('[PageNotes] Unable to read cache', error);
+        return [];
+    }
+}
+
+function writePageNotesToLocal(notes) {
+    try {
+        localStorage.setItem(LOCAL_PAGE_NOTES_CACHE_KEY, JSON.stringify(notes));
+    } catch (error) {
+        console.warn('[PageNotes] Unable to write cache', error);
+    }
+}
+
+function updatePageNotesCache(updater) {
+    const current = pageNotesCache || readPageNotesFromLocal();
+    const updated = updater(current);
+    pageNotesCache = updated;
+    writePageNotesToLocal(updated);
+}
+
+function readNoteFoldersFromLocal() {
+    try {
+        const raw = localStorage.getItem(LOCAL_NOTE_FOLDERS_CACHE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (error) {
+        console.warn('[NoteFolders] Unable to read cache', error);
+        return [];
+    }
+}
+
+function writeNoteFoldersToLocal(folders) {
+    try {
+        localStorage.setItem(LOCAL_NOTE_FOLDERS_CACHE_KEY, JSON.stringify(folders));
+    } catch (error) {
+        console.warn('[NoteFolders] Unable to write cache', error);
+    }
+}
+
+function updateNoteFoldersCache(updater) {
+    const current = noteFoldersCache || readNoteFoldersFromLocal();
+    const updated = updater(current);
+    noteFoldersCache = updated;
+    writeNoteFoldersToLocal(updated);
+}
 
 const mutationExecutors = {
     saveIdea: async (payload = {}) => {
@@ -199,7 +258,41 @@ const mutationExecutors = {
         if (!id) return;
         await updateDoc(doc(ideasCollection, id), { priority });
         perfMonitor.trackWrite(1);
-    }
+    },
+    savePageNote: async (payload = {}) => {
+        if (!payload?.id) return;
+        const firestorePayload = { ...payload };
+        if (typeof firestorePayload.createdAt === 'number') {
+            firestorePayload.createdAt = Timestamp.fromMillis(firestorePayload.createdAt);
+        }
+        if (typeof firestorePayload.updatedAt === 'number') {
+            firestorePayload.updatedAt = Timestamp.fromMillis(firestorePayload.updatedAt);
+        }
+        await setDoc(doc(notesCollection, payload.id), firestorePayload);
+        perfMonitor.trackWrite(1);
+    },
+    deletePageNote: async ({ id }) => {
+        if (!id) return;
+        await deleteDoc(doc(notesCollection, id));
+        perfMonitor.trackWrite(1);
+    },
+    saveNoteFolder: async (payload = {}) => {
+        if (!payload?.id) return;
+        const firestorePayload = { ...payload };
+        if (typeof firestorePayload.createdAt === 'number') {
+            firestorePayload.createdAt = Timestamp.fromMillis(firestorePayload.createdAt);
+        }
+        if (typeof firestorePayload.updatedAt === 'number') {
+            firestorePayload.updatedAt = Timestamp.fromMillis(firestorePayload.updatedAt);
+        }
+        await setDoc(doc(noteFoldersCollection, payload.id), firestorePayload);
+        perfMonitor.trackWrite(1);
+    },
+    deleteNoteFolder: async ({ id }) => {
+        if (!id) return;
+        await deleteDoc(doc(noteFoldersCollection, id));
+        perfMonitor.trackWrite(1);
+    },
 };
 
 async function runMutation({ type, payload, userId, applyLocal }) {
