@@ -335,6 +335,11 @@ async function createNote() {
             content: '',
             folderId: state.activeFolderId,
         });
+        // Add to state immediately so renderEditor can find it
+        // (subscription callback may not have fired yet)
+        if (!state.notes.find(n => n.id === newNote.id)) {
+            state.notes.unshift(newNote);
+        }
         state.activeNoteId = newNote.id;
         renderNotesList();
         renderEditor();

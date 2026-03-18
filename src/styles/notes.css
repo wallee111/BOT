@@ -11,31 +11,7 @@
     position: relative;
 }
 
-/* ── Icon buttons (new folder, new note) ─────────────────────── */
-
-.notes-icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 8px;
-    background: rgba(255, 202, 40, 0.12);
-    color: var(--md-sys-color-primary);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background-color var(--md-sys-motion-duration-medium, 250ms);
-}
-
-.notes-icon-btn:hover {
-    background: rgba(255, 202, 40, 0.22);
-}
-
-.notes-icon-btn svg {
-    width: 20px;
-    height: 20px;
-}
+/* (icon button styles consolidated below) */
 
 /* ── Shared panel base ─────────────────────────────────────────── */
 
@@ -78,8 +54,8 @@
     height: 36px;
     border: none;
     border-radius: var(--md-sys-shape-corner-full);
-    background: transparent;
-    color: var(--md-sys-color-on-surface-variant);
+    background: rgba(255, 202, 40, 0.15);
+    color: var(--md-sys-color-primary);
     cursor: pointer;
     flex-shrink: 0;
     transition: background var(--md-sys-motion-duration-short2, 100ms) ease,
@@ -87,8 +63,8 @@
 }
 
 .notes-icon-btn:hover {
-    background: rgba(var(--md-sys-color-on-surface-rgb, 0 0 0), 0.08);
-    color: var(--md-sys-color-on-surface);
+    background: rgba(255, 202, 40, 0.28);
+    color: var(--md-sys-color-primary);
 }
 
 .notes-icon-btn:active {
