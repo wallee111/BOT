@@ -12,7 +12,13 @@ const API_KEY = defineSecret('API_KEY');
 const OWNER_USER_ID = defineSecret('OWNER_USER_ID');
 
 const app = express();
-app.use(cors({ origin: true }));
+app.use(cors({
+  origin: [
+    'https://bucket0f-thoughts.web.app',
+    'https://bucket0f-thoughts.firebaseapp.com',
+    'capacitor://com.bot.bucketofthoughts',
+  ],
+}));
 app.use(express.json());
 app.use(validateApiKey);
 

@@ -148,8 +148,6 @@ export function createSelectionManager(viewportEl, surfaceEl, engine, options = 
                 selectItem(el);
             }
         });
-
-        options.onSelectionChange?.(selectedItems.size);
     }
 
     // ── Selection management ─────────────────────────────────────
@@ -157,6 +155,14 @@ export function createSelectionManager(viewportEl, surfaceEl, engine, options = 
     function selectItem(el) {
         selectedItems.add(el);
         el.classList.add('is-selected');
+        options.onSelectionChange?.(selectedItems.size);
+    }
+
+    function deselectItem(el) {
+        if (!selectedItems.has(el)) return;
+        selectedItems.delete(el);
+        el.classList.remove('is-selected');
+        options.onSelectionChange?.(selectedItems.size);
     }
 
     function deselectAll() {
@@ -176,7 +182,6 @@ export function createSelectionManager(viewportEl, surfaceEl, engine, options = 
      * Returns true if group drag was initiated (caller should skip its own drag).
      */
     function startGroupDrag(e, triggerEl) {
-        if (!engine.isDesktop()) return false;
         if (selectedItems.size < 2) return false;
         if (!selectedItems.has(triggerEl)) return false;
 
@@ -272,6 +277,7 @@ export function createSelectionManager(viewportEl, surfaceEl, engine, options = 
         deselectAll,
         isSelected,
         selectItem,
+        deselectItem,
         startGroupDrag,
         isGroupDragging,
         handleGroupDragMove,

@@ -26,6 +26,29 @@ let currentUser = null;
 let authInitialized = false;
 let authInitPromise = null;
 
+// Handle redirect result on app startup (called once per session)
+async function initializeAuthOnStartup() {
+    try {
+        // On iOS (Capacitor), check for redirect result from Google OAuth
+        if (isCapacitor()) {
+            console.log('[auth] Capacitor detected - checking for redirect result on startup');
+            const result = await getRedirectResult(auth);
+            if (result?.user) {
+                console.log('[auth] User authenticated via redirect:', result.user.email);
+                currentUser = result.user;
+                authInitialized = true;
+                return result.user;
+            }
+        }
+    } catch (error) {
+        console.error('[auth] Startup redirect check error:', error);
+        // Continue even if redirect check fails - user might already be logged in
+    }
+
+    // Fall back to normal auth state check
+    return waitForAuthState();
+}
+
 // Wait for current auth state without creating new users
 function waitForAuthState() {
     if (authInitPromise) return authInitPromise;
@@ -40,9 +63,15 @@ function waitForAuthState() {
     return authInitPromise;
 }
 
+// Initialize auth on module load (runs once)
+const startupInitPromise = initializeAuthOnStartup();
+
 export async function ensureAuthSession({ requireAuth = false } = {}) {
-    // Always wait for auth state to be initialized
-    const existing = auth.currentUser || await waitForAuthState();
+    // Wait for startup initialization first (handles OAuth redirects)
+    await startupInitPromise;
+
+    // Then check current auth state
+    const existing = auth.currentUser || currentUser;
 
     if (existing || !requireAuth) {
         return existing ?? null;
@@ -51,7 +80,9 @@ export async function ensureAuthSession({ requireAuth = false } = {}) {
 }
 
 export async function getCurrentUser() {
-    const user = auth.currentUser || (authInitialized ? currentUser : await waitForAuthState());
+    // Wait for startup auth initialization first
+    await startupInitPromise;
+    const user = auth.currentUser || currentUser;
     return user ?? null;
 }
 
@@ -73,7 +104,7 @@ export async function getCurrentUserProfile() {
 
 export async function signInWithGoogle() {
     try {
-        await ensureAuthSession();
+        // Quick sync check — skip the full startup await
         if (auth.currentUser) {
             console.log('[auth] User already signed in:', auth.currentUser.email);
             return auth.currentUser;
@@ -82,70 +113,20 @@ export async function signInWithGoogle() {
         // Use redirect for Capacitor (iOS/Android), popup for web
         if (isCapacitor()) {
             console.log('[auth] Capacitor detected - using redirect flow');
-            console.log('[auth] Redirecting to Google OAuth. Redirect URL: capacitor://com.bot.bucketofthoughts/signin.html');
             await signInWithRedirect(auth, provider);
-            // After redirect, page will reload and handleSignInRedirect() will be called
+            // After redirect, page will reload and initializeAuthOnStartup() handles the result
         } else {
             console.log('[auth] Web detected - using popup flow');
             const result = await signInWithPopup(auth, provider);
             currentUser = result.user;
             authInitialized = true;
             console.log('[auth] Popup sign-in successful, user:', result.user.email);
-
-            // Wait for auth state to fully propagate
-            return new Promise((resolve) => {
-                const unsubscribe = onAuthStateChanged(auth, (user) => {
-                    if (user && user.uid === result.user.uid) {
-                        console.log('[auth] Auth state confirmed for user:', user.email);
-                        currentUser = user;
-                        unsubscribe();
-                        resolve(user);
-                    }
-                });
-
-                // Fallback: resolve after 1 second even if onAuthStateChanged doesn't fire
-                setTimeout(() => {
-                    console.log('[auth] Auth state confirmation timeout, proceeding with result.user');
-                    unsubscribe();
-                    resolve(result.user);
-                }, 1000);
-            });
+            return result.user;
         }
     } catch (error) {
         console.error('[auth] Sign in error:', error);
         throw error;
     }
-}
-
-export async function handleSignInRedirect() {
-    try {
-        console.log('[auth] Checking for redirect result...');
-
-        // First check if Firebase already has a current user (most reliable)
-        if (auth.currentUser) {
-            console.log('[auth] User already logged in:', auth.currentUser.email);
-            currentUser = auth.currentUser;
-            authInitialized = true;
-            return auth.currentUser;
-        }
-
-        // Fallback: Check the redirect result
-        const result = await getRedirectResult(auth);
-        console.log('[auth] Redirect result:', result);
-        if (result?.user) {
-            console.log('[auth] User found from redirect:', result.user.email);
-            currentUser = result.user;
-            authInitialized = true;
-            return result.user;
-        }
-        console.log('[auth] No redirect result found');
-    } catch (error) {
-        console.error('[auth] Redirect result error:', error);
-        console.error('[auth] Error code:', error?.code);
-        console.error('[auth] Error message:', error?.message);
-        throw error;
-    }
-    return null;
 }
 
 export async function signOutUser() {

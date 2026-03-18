@@ -6,6 +6,7 @@ import {
   getCurrentUserProfile,
   signOutUser
 } from '../lib/auth.js';
+import { showConfirmDialog } from '../lib/confirm-dialog.js';
 
 const userEmailDisplay = document.getElementById('userEmailDisplay');
 const signOutBtn = document.getElementById('signOutBtn');
@@ -43,7 +44,7 @@ async function loadProfile() {
  */
 if (signOutBtn) {
   signOutBtn.addEventListener('click', async () => {
-    const confirmed = confirm('Sign out of your account?');
+    const confirmed = await showConfirmDialog('Sign out of your account?', { confirmLabel: 'Sign Out', tone: 'default' });
     if (!confirmed) return;
     try {
       await signOutUser();
@@ -69,13 +70,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem(THEME_KEY) || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
 
+    function updateToggleState() {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const btn = document.getElementById('themeToggleAccount');
+        const label = document.getElementById('themeLabel');
+        if (btn) {
+            btn.setAttribute('aria-checked', isDark ? 'true' : 'false');
+        }
+        if (label) {
+            label.textContent = isDark ? 'Dark mode' : 'Light mode';
+        }
+    }
+
     const toggle = () => {
         const current = document.documentElement.getAttribute('data-theme') || 'dark';
         const next = current === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem(THEME_KEY, next);
+        updateToggleState();
     };
 
+    // Handle all theme toggles
     document.getElementById('themeToggleSidebar')?.addEventListener('click', toggle);
     document.getElementById('themeToggle')?.addEventListener('click', toggle);
+    document.getElementById('themeToggleAccount')?.addEventListener('click', toggle);
+
+    // Initialize state on load (module scripts run after DOMContentLoaded)
+    updateToggleState();
 })();

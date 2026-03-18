@@ -63,6 +63,12 @@
     outline-offset: 2px;
 }
 
+.canvas-zoom-overlay__btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 .canvas-zoom-overlay__level {
     font-size: 0.75rem;
     font-weight: 600;
@@ -322,7 +328,7 @@
     background-color: var(--md-sys-color-surface-dim);
     background-image: radial-gradient(circle, var(--md-sys-color-outline-variant) 1px, transparent 1px);
     background-size: 40px 40px;
-    touch-action: pan-x pan-y; /* Panning only, no pinch zoom (use zoom buttons instead) */
+    touch-action: none; /* Engine handles all pan/pinch via pointer events; browser default gestures suppressed */
 }
 
 /* Desktop: default cursor is pointer (select mode), not grab */
@@ -380,6 +386,43 @@
     width: 0;
     height: 0;
     transform-origin: 0 0;
+}
+
+/* ── Canvas Empty State ──────────────────────────────────────── */
+
+.canvas-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.canvas-empty-state__headline {
+    font-size: var(--md-sys-typescale-title-medium-size);
+    font-weight: var(--md-sys-typescale-title-medium-weight);
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+    opacity: 0.85;
+}
+
+.canvas-empty-state__hint {
+    font-size: var(--md-sys-typescale-body-medium-size);
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+    opacity: 0.7;
+}
+
+.canvas-empty-state__hint strong {
+    color: var(--md-sys-color-primary);
+    font-weight: 600;
+    opacity: 1;
 }
 
 /* ── Category Cards ──────────────────────────────────────────── */
@@ -926,4 +969,60 @@
     .canvas-thread-panel {
         width: 100vw;
     }
+}
+
+/* ── Fix 7: Touch targets on mobile (WCAG 2.5.5 — 44×44px minimum) ──── */
+
+@media (max-width: 1023px) {
+    .canvas-card__remove {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-zoom-overlay__btn {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-header__delete {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .canvas-card__resize-handle--se {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* ── Fix 8: Focus-visible styles for opacity-hidden buttons ──── */
+
+.canvas-card__remove:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+}
+
+.canvas-header__delete:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 2px;
+}
+
+/* Show remove button and resize handle when card is focused */
+.canvas-card.is-focused .canvas-card__remove {
+    opacity: 1;
+}
+
+.canvas-card.is-focused .canvas-card__resize-handle {
+    opacity: 0.5;
 }

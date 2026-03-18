@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Account - BOT</title>
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
@@ -47,7 +47,7 @@
                 <a href="review.html">Review</a>
                 <a href="categories.html">Categories</a>
                 <a href="canvas.html">Canvas</a>
-                <a href="account.html" class="is-active">Account</a>
+                <a href="account.html" class="is-active" aria-current="page">Account</a>
             </nav>
             <div class="sidebar-footer">
                 <div id="sidebarSync" class="sync-indicator"></div>
@@ -61,6 +61,24 @@
                 <div class="account-info">
                     <p class="account-label">Signed in as</p>
                     <p class="account-email" id="userEmailDisplay">Loading…</p>
+                </div>
+
+                <!-- Theme Toggle Setting -->
+                <div class="account-setting">
+                    <div class="account-setting__header">
+                        <label for="themeToggleAccount" class="account-setting__label">Theme</label>
+                        <button
+                            type="button"
+                            id="themeToggleAccount"
+                            class="theme-toggle-switch"
+                            aria-label="Toggle light/dark theme"
+                            role="switch"
+                            aria-checked="false">
+                            <span class="theme-toggle-switch__track"></span>
+                            <span class="theme-toggle-switch__thumb"></span>
+                        </button>
+                    </div>
+                    <p class="account-setting__description" id="themeLabel">Dark mode</p>
                 </div>
 
                 <button class="btn btn-danger" id="signOutBtn">

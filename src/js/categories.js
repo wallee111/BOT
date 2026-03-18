@@ -5,7 +5,8 @@ import {
     getCategoryPalette,
     renameCategory,
     setCategoryColor,
-    setCategoryVisibility
+    setCategoryVisibility,
+    subscribeToIdeas
 } from '../lib/storage.js';
 import { getReadableTextColor, HEX_COLOR_PATTERN, escapeHtml } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
@@ -958,6 +959,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     await loadData();
+
+    const unsubIdeas = subscribeToIdeas((_ideas) => {
+        loadData(); // re-aggregate category stats when ideas change
+    });
+    window.addEventListener('beforeunload', () => unsubIdeas());
 });
 
 // Listen for updates from other pages

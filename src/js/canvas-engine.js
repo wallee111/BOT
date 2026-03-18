@@ -7,7 +7,7 @@
  *   engine.destroy();
  */
 
-const ZOOM_MIN = 0.1;
+const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3.0;
 const ZOOM_STEP = 0.1;
 const GRID_SIZE = 40;
@@ -201,6 +201,7 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
             initialPanY: state.panY,
             mode: 'detecting', // 'detecting' | 'pinch' | 'pan'
             startMid: mid,
+            lastMid: mid, // track previous midpoint for per-frame pan delta
         };
     }
 
@@ -236,7 +237,7 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
             }
         }
 
-        // Execute pinch zoom
+        // Execute pinch zoom (with simultaneous midpoint pan, like native iOS Maps)
         if (pinchState.mode === 'pinch') {
             if (pinchState.initialDist === 0) return;
 
@@ -257,8 +258,17 @@ export function createCanvasEngine(viewportEl, surfaceEl, options = {}) {
             state.panY = cursorY - zoomRatio * (cursorY - state.panY);
             state.zoom = newZoom;
 
+            // Also apply per-frame midpoint delta so the canvas pans with the fingers
+            const midDx = currentMid.x - (pinchState.lastMid ? pinchState.lastMid.x : currentMid.x);
+            const midDy = currentMid.y - (pinchState.lastMid ? pinchState.lastMid.y : currentMid.y);
+            state.panX += midDx;
+            state.panY += midDy;
+
             applyTransform();
         }
+
+        // Update lastMid after processing so the next frame has an accurate delta
+        pinchState.lastMid = { x: currentMid.x, y: currentMid.y };
 
         // Execute two-finger pan
         if (pinchState.mode === 'pan' && twoFingerPanState) {
