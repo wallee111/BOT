@@ -32,7 +32,7 @@
   --md-sys-color-error: #ef4444;
   --md-sys-color-on-error: #ffffff;
   --md-sys-color-error-container: rgba(239, 68, 68, 0.15);
-  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-on-error-container: #ffb4ab;
 
   /* ========================================
      SUCCESS COLOR (Green)
@@ -40,7 +40,7 @@
   --md-sys-color-success: #77dd77;
   --md-sys-color-on-success: #1b1b1f;
   --md-sys-color-success-container: rgba(119, 221, 119, 0.15);
-  --md-sys-color-on-success-container: #e2ffe2;
+  --md-sys-color-on-success-container: #a8f0a8;
 
   /* ========================================
      WARNING COLOR (Orange)
