@@ -63,6 +63,12 @@
                 color var(--md-sys-motion-duration-short2, 100ms) ease;
 }
 
+.notes-icon-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 .notes-icon-btn:hover {
     background: rgba(255, 202, 40, 0.28);
     color: var(--md-sys-color-primary);
