@@ -53,6 +53,9 @@ let overlayDragCtrl = null;
 // Guard flag: true while we are flushing a save to Firestore so the echoed
 // snapshot from subscribeToCanvasLayout does not trigger a redundant re-render.
 let isSavingLocally = false;
+// Guard flag: prevents debouncedSave from overwriting Firestore data with an
+// empty layout before the initial Firestore load has completed.
+let layoutLoaded = false;
 
 // ── Init ────────────────────────────────────────────────────────
 
@@ -204,6 +207,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     categoryPalette = palette;
 
+    // Firestore data loaded — safe to allow saves now
+    layoutLoaded = true;
+
     // 8. Real-time listeners as single source of truth
     const unsubscribe = subscribeToIdeas((ideas) => {
         allIdeas = ideas;
@@ -315,6 +321,7 @@ function removeLayoutHeader(id) {
 }
 
 function debouncedSave() {
+    if (!layoutLoaded) return; // Don't save until Firestore data is loaded
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         layout.viewport = engine.getState();
