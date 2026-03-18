@@ -1283,7 +1283,7 @@ import {
     saveNoteFolder,
     deleteNoteFolder,
 } from '../lib/storage.js';
-import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
+import { ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
 import { showConfirmDialog } from '../lib/confirm-dialog.js';
 import { escapeHtml } from '../lib/utils.js';
@@ -1808,13 +1808,11 @@ function wireEvents() {
 // ── Init ────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const userId = getCurrentUserId();
-    if (!userId) {
+    const user = await ensureAuthSession({ requireAuth: true });
+    if (!user) {
         window.location.href = '/signin.html';
         return;
     }
-
-    await ensureAuthSession({ requireAuth: true });
 
     // Set initial mobile view
     setMobileView('folders');
