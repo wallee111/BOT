@@ -1662,3 +1662,206 @@ export function subscribeToCategorySettings(callback) {
 
     return () => unsubscribe();
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Page Notes & Folders — CRUD
+// ══════════════════════════════════════════════════════════════════
+
+export function subscribeToPageNotes(callback) {
+    let unsubscribe = () => {};
+
+    const cached = readPageNotesFromLocal();
+    if (cached.length > 0) {
+        pageNotesCache = cached;
+        callback(cached);
+    }
+
+    getCurrentUserId().then(userId => {
+        if (!userId) {
+            console.warn('[subscribeToPageNotes] No userId; skipping subscription.');
+            return;
+        }
+
+        const q = query(notesCollection, where('userId', '==', userId));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            const notes = snapshot.docs.map(d => {
+                const data = d.data() || {};
+                return {
+                    ...data,
+                    id: d.id,
+                    createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? 0,
+                    updatedAt: data.updatedAt?.toMillis?.() ?? data.updatedAt ?? 0,
+                };
+            }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+            pageNotesCache = notes;
+            writePageNotesToLocal(notes);
+            callback(notes);
+        }, (error) => {
+            console.error('[subscribeToPageNotes] Snapshot error:', error);
+            if (pageNotesCache) {
+                callback([...pageNotesCache]);
+            }
+        });
+    }).catch(error => {
+        console.error('[subscribeToPageNotes] Error getting user ID:', error);
+    });
+
+    return () => unsubscribe();
+}
+
+export async function savePageNote(note) {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User must be authenticated to save notes');
+
+    const now = Date.now();
+    const payload = {
+        ...note,
+        id: note.id || doc(notesCollection).id,
+        userId,
+        title: note.title ?? '',
+        content: note.content ?? '',
+        folderId: note.folderId ?? null,
+        createdAt: note.createdAt ?? now,
+        updatedAt: now,
+    };
+
+    const applyLocal = () => {
+        updatePageNotesCache(current => {
+            const filtered = current.filter(n => n.id !== payload.id);
+            filtered.push(payload);
+            return filtered.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        });
+    };
+
+    await runMutation({
+        type: 'savePageNote',
+        payload,
+        userId,
+        applyLocal,
+    });
+
+    return payload;
+}
+
+export async function deletePageNote(noteId) {
+    if (!noteId) return false;
+
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User must be authenticated to delete notes');
+
+    const applyLocal = () => {
+        updatePageNotesCache(current => current.filter(n => n.id !== noteId));
+    };
+
+    await runMutation({
+        type: 'deletePageNote',
+        payload: { id: noteId },
+        userId,
+        applyLocal,
+    });
+
+    return true;
+}
+
+export function subscribeToNoteFolders(callback) {
+    let unsubscribe = () => {};
+
+    const cached = readNoteFoldersFromLocal();
+    if (cached.length > 0) {
+        noteFoldersCache = cached;
+        callback(cached);
+    }
+
+    getCurrentUserId().then(userId => {
+        if (!userId) {
+            console.warn('[subscribeToNoteFolders] No userId; skipping subscription.');
+            return;
+        }
+
+        const q = query(noteFoldersCollection, where('userId', '==', userId));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            const folders = snapshot.docs.map(d => {
+                const data = d.data() || {};
+                return {
+                    ...data,
+                    id: d.id,
+                    createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? 0,
+                    updatedAt: data.updatedAt?.toMillis?.() ?? data.updatedAt ?? 0,
+                };
+            }).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+            noteFoldersCache = folders;
+            writeNoteFoldersToLocal(folders);
+            callback(folders);
+        }, (error) => {
+            console.error('[subscribeToNoteFolders] Snapshot error:', error);
+            if (noteFoldersCache) {
+                callback([...noteFoldersCache]);
+            }
+        });
+    }).catch(error => {
+        console.error('[subscribeToNoteFolders] Error getting user ID:', error);
+    });
+
+    return () => unsubscribe();
+}
+
+export async function saveNoteFolder(folder) {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User must be authenticated to save folders');
+
+    const now = Date.now();
+    const payload = {
+        ...folder,
+        id: folder.id || doc(noteFoldersCollection).id,
+        userId,
+        name: folder.name ?? 'Untitled Folder',
+        sortOrder: folder.sortOrder ?? 0,
+        createdAt: folder.createdAt ?? now,
+        updatedAt: now,
+    };
+
+    const applyLocal = () => {
+        updateNoteFoldersCache(current => {
+            const filtered = current.filter(f => f.id !== payload.id);
+            filtered.push(payload);
+            return filtered.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        });
+    };
+
+    await runMutation({
+        type: 'saveNoteFolder',
+        payload,
+        userId,
+        applyLocal,
+    });
+
+    return payload;
+}
+
+export async function deleteNoteFolder(folderId) {
+    if (!folderId) return false;
+
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User must be authenticated to delete folders');
+
+    const allNotes = pageNotesCache || readPageNotesFromLocal();
+    const notesInFolder = allNotes.filter(n => n.folderId === folderId);
+    for (const note of notesInFolder) {
+        await savePageNote({ ...note, folderId: null });
+    }
+
+    const applyLocal = () => {
+        updateNoteFoldersCache(current => current.filter(f => f.id !== folderId));
+    };
+
+    await runMutation({
+        type: 'deleteNoteFolder',
+        payload: { id: folderId },
+        userId,
+        applyLocal,
+    });
+
+    return true;
+}
