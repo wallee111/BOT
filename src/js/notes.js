@@ -197,6 +197,7 @@ function renderNotesList() {
                 role="option"
                 aria-selected="${isActive}"
                 data-note-id="${escapeHtml(note.id)}"
+                draggable="true"
                 tabindex="0">
                 <div class="notes-list-item__title">${escapeHtml(title)}</div>
                 <div class="notes-list-item__snippet">${escapeHtml(snippet || 'No content')}</div>
@@ -453,11 +454,15 @@ function showMoveMenu() {
     moveFolderMenu.style.top = `${rect.bottom + 4}px`;
     moveFolderMenu.style.left = `${rect.left}px`;
 
+    // Trigger open after removing hidden so the CSS transition plays
+    requestAnimationFrame(() => moveFolderMenu.classList.add('is-open'));
     moveNoteBtn.setAttribute('aria-expanded', 'true');
 }
 
 function hideMoveMenu() {
-    moveFolderMenu.setAttribute('hidden', '');
+    moveFolderMenu.classList.remove('is-open');
+    // Wait for close transition before hiding
+    setTimeout(() => moveFolderMenu.setAttribute('hidden', ''), 150);
     moveNoteBtn.setAttribute('aria-expanded', 'false');
 }
 
@@ -698,6 +703,70 @@ function wireEvents() {
     // Mobile back buttons
     notesListBackBtn.addEventListener('click', () => setMobileView('folders'));
     notesEditorBackBtn.addEventListener('click', () => setMobileView('list'));
+
+    // ── Drag-and-drop notes to folders (desktop only) ───────────
+    notesList.addEventListener('dragstart', (e) => {
+        const item = e.target.closest('.notes-list-item');
+        if (!item) return;
+        e.dataTransfer.setData('text/plain', item.dataset.noteId);
+        e.dataTransfer.effectAllowed = 'move';
+        requestAnimationFrame(() => item.classList.add('is-dragging'));
+    });
+
+    notesList.addEventListener('dragend', (e) => {
+        const item = e.target.closest('.notes-list-item');
+        if (item) item.classList.remove('is-dragging');
+        // Clean up any lingering drag-over highlights
+        notesFolderList.querySelectorAll('.is-drag-over').forEach(el =>
+            el.classList.remove('is-drag-over')
+        );
+    });
+
+    notesFolderList.addEventListener('dragover', (e) => {
+        const item = e.target.closest('.notes-folder-item');
+        if (!item) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        // Highlight only the hovered folder
+        notesFolderList.querySelectorAll('.is-drag-over').forEach(el =>
+            el.classList.remove('is-drag-over')
+        );
+        item.classList.add('is-drag-over');
+    });
+
+    notesFolderList.addEventListener('dragleave', (e) => {
+        const item = e.target.closest('.notes-folder-item');
+        if (item && !item.contains(e.relatedTarget)) {
+            item.classList.remove('is-drag-over');
+        }
+    });
+
+    notesFolderList.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        const item = e.target.closest('.notes-folder-item');
+        if (!item) return;
+        item.classList.remove('is-drag-over');
+
+        const noteId = e.dataTransfer.getData('text/plain');
+        if (!noteId) return;
+
+        const note = state.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        const folderId = item.dataset.folderId;
+        const newFolderId = (folderId === '__all__' || folderId === '__none__') ? null : folderId;
+
+        if (note.folderId === newFolderId) return; // already in this folder
+
+        try {
+            await savePageNote({ ...note, folderId: newFolderId });
+            const folderName = getFolderName(newFolderId);
+            showToast(folderName ? `Moved to "${folderName}"` : 'Moved to All Notes');
+        } catch (err) {
+            console.error('[notes] drag-move error:', err);
+            showToast('Could not move note', { tone: 'error' });
+        }
+    });
 }
 
 // ── Init ───────────────────────────────────────────────────────
