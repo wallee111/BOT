@@ -11,6 +11,32 @@
     position: relative;
 }
 
+/* ── Icon buttons (new folder, new note) ─────────────────────── */
+
+.notes-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 202, 40, 0.12);
+    color: var(--md-sys-color-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color var(--md-sys-motion-duration-medium, 250ms);
+}
+
+.notes-icon-btn:hover {
+    background: rgba(255, 202, 40, 0.22);
+}
+
+.notes-icon-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
 /* ── Shared panel base ─────────────────────────────────────────── */
 
 .notes-folders-panel,
