@@ -14,7 +14,7 @@ function ensureToastContainer() {
   return container;
 }
 
-export function showToast(message, { tone = 'error', timeout = 4200, action = null } = {}) {
+export function showToast(message, { tone = 'neutral', timeout = 4200, action = null } = {}) {
   const container = ensureToastContainer();
   const toast = document.createElement('div');
   toast.className = `toast ${tone === 'error' ? 'toast--error' : ''}`;

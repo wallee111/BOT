@@ -1,8 +1,8 @@
 /* Account page - clean, minimal design */
 :root {
-    --acct-bg: white;
-    --acct-text: #333;
-    --acct-text-muted: #666;
+    --acct-bg: var(--md-sys-color-surface-container, white);
+    --acct-text: var(--md-sys-color-on-surface, #333);
+    --acct-text-muted: var(--md-sys-color-on-surface-variant, #666);
 }
 
 body {
@@ -31,7 +31,7 @@ body {
 }
 
 .settings-card {
-    background: var(--acct-bg);
+    background: var(--md-sys-color-surface-container, var(--acct-bg));
     border-radius: 16px;
     padding: 40px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -49,7 +49,7 @@ body {
 .account-info {
     margin-bottom: 32px;
     padding: 24px;
-    background: #f8f9fa;
+    background: var(--md-sys-color-surface-container-low, #f8f9fa);
     border-radius: 12px;
     text-align: center;
 }
@@ -69,6 +69,87 @@ body {
     font-weight: 500;
     color: var(--acct-text);
     word-break: break-word;
+}
+
+/* Account settings section */
+.account-setting {
+    margin-bottom: 32px;
+    padding: 20px;
+    background: var(--md-sys-color-surface-container-low, #f8f9fa);
+    border-radius: 12px;
+}
+
+.account-setting__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.account-setting__label {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--acct-text);
+    margin: 0;
+    cursor: pointer;
+}
+
+.account-setting__description {
+    margin: 0;
+    font-size: 14px;
+    color: var(--acct-text-muted);
+}
+
+/* Theme toggle switch */
+.theme-toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 28px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 14px;
+    transition: all 0.3s ease;
+}
+
+.theme-toggle-switch:focus-visible {
+    outline: 3px solid var(--md-sys-color-primary, #ffca28);
+    outline-offset: 2px;
+}
+
+.theme-toggle-switch__track {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: var(--md-sys-color-outline, #ccc);
+    border-radius: 14px;
+    transition: background 0.3s ease;
+}
+
+.theme-toggle-switch__thumb {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    background: var(--md-sys-color-on-primary, white);
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+    z-index: 1;
+    transform: translateX(-12px);
+}
+
+/* Checked state */
+.theme-toggle-switch[aria-checked="true"] .theme-toggle-switch__track {
+    background: var(--md-sys-color-primary, #ffca28);
+}
+
+.theme-toggle-switch[aria-checked="true"] .theme-toggle-switch__thumb {
+    transform: translateX(12px);
 }
 
 /* Sign out button */
@@ -103,7 +184,7 @@ body {
 
 /* Focus styles for accessibility */
 .btn:focus-visible {
-    outline: 3px solid #ffca28;
+    outline: 3px solid var(--md-sys-color-primary, #ffca28);
     outline-offset: 2px;
 }
 

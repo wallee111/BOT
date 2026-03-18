@@ -8,11 +8,14 @@
  */
 
 import { escapeHtml } from '../lib/utils.js';
+import { showToast } from '../lib/toast.js';
 
 export function createHeaderManager(surfaceEl, pillContainerEl, engine, options = {}) {
     const dragStates = new WeakMap();
     const viewportEl = surfaceEl.parentElement;
     let selectionManager = null;
+    const LONG_PRESS_MS = 450;
+    const LONG_PRESS_MOVE_TOLERANCE = 10;
 
     /** Track which header is currently "selected" (focused, drag-ready) */
     let selectedHeader = null;
@@ -23,6 +26,9 @@ export function createHeaderManager(surfaceEl, pillContainerEl, engine, options 
         el.className = 'canvas-header';
         el.dataset.headerId = id;
         el.style.transform = `translate(${x}px, ${y}px)`;
+        el.setAttribute('role', 'group');
+        el.setAttribute('aria-label', `${text} section header`);
+        el.setAttribute('tabindex', '0');
 
         // Start with contenteditable OFF — text editing requires two clicks
         el.innerHTML = `
@@ -65,6 +71,7 @@ export function createHeaderManager(surfaceEl, pillContainerEl, engine, options 
 
         // Drag + selection
         initHeaderDrag(el, textEl);
+        attachLongPressSelection(el, textEl);
 
         surfaceEl.appendChild(el);
 
@@ -115,13 +122,12 @@ export function createHeaderManager(surfaceEl, pillContainerEl, engine, options 
         const hx = parseFloat(match?.[1]) || 0;
         const hy = parseFloat(match?.[2]) || 0;
 
-        const rect = viewportEl.getBoundingClientRect();
-        const targetZoom = 1.0;
+        const currentZoom = engine.getState().zoom;
         const pad = 24;
-        const targetPanX = pad - hx * targetZoom;
-        const targetPanY = pad - hy * targetZoom;
+        const targetPanX = pad - hx * currentZoom;
+        const targetPanY = pad - hy * currentZoom;
 
-        engine.animateTo(targetPanX, targetPanY, targetZoom);
+        engine.animateTo(targetPanX, targetPanY, currentZoom);
     }
 
     // ── Drag ────────────────────────────────────────────────────
@@ -168,6 +174,7 @@ export function createHeaderManager(surfaceEl, pillContainerEl, engine, options 
             // If part of a multi-selection, delegate to group drag
             if (selectionManager && selectionManager.startGroupDrag(e, headerEl)) {
                 ds.isPointerDown = false;
+                ds.pointerId = null;
                 return;
             }
 
@@ -268,6 +275,57 @@ export function createHeaderManager(surfaceEl, pillContainerEl, engine, options 
                 headerEl.classList.remove('is-dragging');
                 ds.isDragging = false;
             }
+        });
+    }
+
+    function attachLongPressSelection(headerEl, textEl) {
+        if (!headerEl) return;
+
+        let timer = null;
+        let startX = 0;
+        let startY = 0;
+
+        const clearTimer = () => {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        };
+
+        headerEl.addEventListener('pointerdown', (e) => {
+            if (!selectionManager) return;
+            if (e.pointerType !== 'touch') return;
+            if (textEl?.contentEditable === 'true') return;
+            if (e.target.closest('.canvas-header__delete')) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            clearTimer();
+            timer = setTimeout(() => {
+                timer = null;
+                const alreadySelected = selectionManager.isSelected(headerEl);
+                if (alreadySelected) {
+                    selectionManager.deselectItem?.(headerEl);
+                    showToast('Removed from selection', { timeout: 900 });
+                } else {
+                    selectionManager.selectItem(headerEl);
+                    if (navigator.vibrate) navigator.vibrate(10);
+                    showToast('Selected for group move', { timeout: 900 });
+                }
+            }, LONG_PRESS_MS);
+        });
+
+        headerEl.addEventListener('pointermove', (e) => {
+            if (!timer) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) {
+                clearTimer();
+            }
+        });
+
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt => {
+            headerEl.addEventListener(evt, clearTimer);
         });
     }
 

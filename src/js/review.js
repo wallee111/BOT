@@ -10,13 +10,15 @@ import {
     setIdeaArchived,
     setIdeaPinned,
     updateIdeaText,
-    updateIdeaPriority
+    updateIdeaPriority,
+    subscribeToCategorySettings,
 } from '../lib/storage.js';
 import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime, formatTextContent } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
 import { showToast } from '../lib/toast.js';
+import { showConfirmDialog } from '../lib/confirm-dialog.js';
 
 // Priority constants
 const PRIORITY_BADGES = {
@@ -416,7 +418,28 @@ function render() {
     list.innerHTML = '';
     swipeState.openItem = null;
     if (!ideas.length) {
-        list.innerHTML = `<p>No ideas yet.</p>`;
+        const hasActiveFilters = term || categoryFilters.length || includeUncategorized || statusFilter !== 'all';
+        const noIdeasAtAll = !ideasCache || ideasCache.length === 0;
+
+        if (noIdeasAtAll) {
+            list.innerHTML = `
+                <li class="review-empty review-empty--first-run" aria-live="polite">
+                    <p class="review-empty__headline">No ideas yet</p>
+                    <p class="review-empty__hint">Head to <strong>Capture</strong> to save your first thought.</p>
+                </li>`;
+        } else if (hasActiveFilters) {
+            list.innerHTML = `
+                <li class="review-empty review-empty--filtered" aria-live="polite">
+                    <p class="review-empty__headline">No matches</p>
+                    <p class="review-empty__hint">Try adjusting or clearing your filters.</p>
+                </li>`;
+        } else {
+            list.innerHTML = `
+                <li class="review-empty" aria-live="polite">
+                    <p class="review-empty__headline">Nothing here</p>
+                    <p class="review-empty__hint">No ideas match the current view.</p>
+                </li>`;
+        }
         return;
     }
     const fragment = document.createDocumentFragment();
@@ -744,6 +767,8 @@ list.addEventListener('click', async e => {
     const deleteBtn = e.target.closest('[data-del]');
     if (deleteBtn) {
         const del = deleteBtn.dataset.del;
+        const confirmed = await showConfirmDialog('Delete this idea permanently?');
+        if (!confirmed) return;
         try {
             await deleteIdea(del);
             await Promise.all([updateCategoryList(), refreshIdeas({ force: true })]);
@@ -917,6 +942,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (q.value) {
         setSearchOpen(true);
     }
+
+    // Set up real-time listener for ideas (after auth succeeds)
+    const unsubscribe = subscribeToIdeas((ideas) => {
+        ideasCache = ideas;
+        render();
+    });
+
+    window.addEventListener('beforeunload', () => {
+        unsubscribe();
+        cleanupThreadNotes();
+    });
 });
 
 if (searchToggle) {
@@ -1017,7 +1053,7 @@ function createIdeaListItem(idea) {
             <div class="idea-footer">
                 <div class="idea-actions">
                     <button type="button" class="idea-pin${idea.pinned ? ' is-active' : ''}" data-id="${idea.id}" data-pinned="${!!idea.pinned}" aria-pressed="${!!idea.pinned}" aria-label="${idea.pinned ? 'Unpin idea' : 'Pin idea'}">${pinIcon}</button>
-                    <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Toggle notes">${threadIcon}</button>
+                    <button type="button" class="idea-thread" data-thread-id="${idea.id}" aria-label="Thread notes">${threadIcon}</button>
                 </div>
             </div>
         </div>
@@ -1133,20 +1169,26 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Set up real-time listener for ideas
-const unsubscribe = subscribeToIdeas((ideas) => {
-    ideasCache = ideas;
-    render();
-});
-
-// Clean up listener when page unloads
-window.addEventListener('beforeunload', () => {
-    unsubscribe();
-    cleanupThreadNotes();
-});
 
 // Periodic refresh for category palette (not real-time critical)
 setInterval(() => {
     updateCategoryList().catch(console.error);
     refreshCategoryPalette({ force: true }).catch(console.error);
 }, 30000);
+
+// --- Theme Toggle ---
+(function() {
+    const THEME_KEY = 'bot_theme_v1';
+    const saved = localStorage.getItem(THEME_KEY) || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+
+    const toggle = () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem(THEME_KEY, next);
+    };
+
+    document.getElementById('themeToggleSidebar')?.addEventListener('click', toggle);
+    document.getElementById('themeToggle')?.addEventListener('click', toggle);
+})();

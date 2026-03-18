@@ -72,6 +72,12 @@ function handlePointerDown(e, container) {
     // Only handle primary pointer
     if (!e.isPrimary) return;
 
+    // Inside a canvas card, only allow swipe if the card is focused
+    const canvasCard = container.closest('.canvas-card');
+    if (canvasCard && !canvasCard.classList.contains('is-focused')) {
+        return;
+    }
+
     // Ignore clicks on interactive elements
     if (e.target.closest(SWIPE_IGNORE_SELECTOR)) return;
 

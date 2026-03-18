@@ -8,6 +8,7 @@ import { subscribeToNotes, addNote, getNoteCount, getNotesFromLocal, deleteNote,
 import { escapeHtml, formatTime } from '../lib/utils.js';
 import { showToast } from '../lib/toast.js';
 import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
+import { showConfirmDialog } from '../lib/confirm-dialog.js';
 
 // State per idea: Map<ideaId, { isOpen, notes, unsubscribe, container }>
 const threadStates = new Map();
@@ -108,11 +109,12 @@ export function attachThread(ideaEl, ideaId) {
     threadContainer.innerHTML = `
         <div class="thread-notes-content" data-thread-content="${ideaId}"></div>
         <div class="thread-input-row">
-            <textarea 
-                class="thread-input" 
-                placeholder="Add a note..." 
+            <textarea
+                class="thread-input"
+                placeholder="Add a note..."
                 rows="1"
                 data-thread-input="${ideaId}"
+                aria-label="Add a note to this idea"
             ></textarea>
             <button 
                 type="button" 
@@ -156,6 +158,7 @@ export function updateNoteCount(ideaEl, ideaId) {
 
     btn.dataset.count = count.toString();
     btn.title = count > 0 ? `${count} note${count !== 1 ? 's' : ''}` : 'Add notes';
+    btn.setAttribute('aria-label', count > 0 ? `Thread notes (${count})` : 'Thread notes');
 
     // Update or create inline badge span
     let badge = btn.querySelector('.thread-count-badge');
@@ -488,7 +491,8 @@ function renderNotes(ideaId, notes) {
             const noteId = row?.dataset?.noteId;
             const rowIdeaId = row?.dataset?.ideaId;
             if (!noteId || !rowIdeaId) return;
-            if (!confirm('Delete this note?')) return;
+            const confirmed = await showConfirmDialog('Delete this note?');
+            if (!confirmed) return;
             row.style.opacity = '0.5';
             row.style.pointerEvents = 'none';
             try {
@@ -530,7 +534,7 @@ function openNoteInlineEditor(row, ideaId, noteId) {
     const editor = document.createElement('div');
     editor.className = 'thread-note-inline-edit';
     editor.innerHTML = `
-        <textarea class="thread-note-edit-input" rows="2">${escapeHtml(originalText)}</textarea>
+        <textarea class="thread-note-edit-input" rows="2" aria-label="Edit note text">${escapeHtml(originalText)}</textarea>
         <div class="thread-note-edit-actions">
             <button type="button" class="thread-note-edit-save">Save</button>
             <button type="button" class="thread-note-edit-cancel">Cancel</button>
@@ -582,7 +586,7 @@ function getThreadNotesStyles() {
         /* Inline Thread Notes (X.com style) */
         .thread-notes {
             margin-top: 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid var(--md-sys-color-outline-variant);
             overflow: hidden;
             max-height: 0;
             opacity: 0;
@@ -604,7 +608,7 @@ function getThreadNotesStyles() {
 
         .thread-note {
             padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
         }
 
         .thread-note:last-of-type {
@@ -618,14 +622,14 @@ function getThreadNotesStyles() {
         .thread-note-text {
             font-size: 0.875rem;
             line-height: 1.5;
-            color: #e0e0e5;
+            color: var(--md-sys-color-on-surface);
             white-space: pre-wrap;
             word-break: break-word;
         }
 
         .thread-note-meta {
             font-size: 0.7rem;
-            color: #888;
+            color: var(--md-sys-color-on-surface-variant);
             margin-top: 0.25rem;
         }
 
@@ -638,8 +642,8 @@ function getThreadNotesStyles() {
 
         .thread-input {
             flex: 1;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--md-sys-color-surface-container);
+            border: 1px solid var(--md-sys-color-outline-variant);
             border-radius: 1rem;
             padding: 0.6rem 1rem;
             color: inherit;
@@ -652,8 +656,8 @@ function getThreadNotesStyles() {
 
         .thread-input:focus {
             outline: none;
-            border-color: rgba(255, 202, 40, 0.5);
-            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--md-sys-color-primary);
+            background: var(--md-sys-color-surface-container-high);
         }
 
         .thread-input:disabled {
@@ -665,8 +669,8 @@ function getThreadNotesStyles() {
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: #ffca28;
-            color: #1a1a1a;
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
             border: none;
             display: flex;
             align-items: center;
@@ -693,13 +697,13 @@ function getThreadNotesStyles() {
         .thread-empty,
         .thread-error {
             font-size: 0.85rem;
-            color: #888;
+            color: var(--md-sys-color-on-surface-variant);
             padding: 0.5rem 0;
             text-align: center;
         }
 
         .thread-error {
-            color: #ff6b6b;
+            color: var(--md-sys-color-error);
         }
 
         /* Thread button with inline note count */
@@ -717,7 +721,7 @@ function getThreadNotesStyles() {
         .idea-thread .thread-count-badge {
             font-size: 0.65rem;
             font-weight: 700;
-            color: var(--md-sys-color-primary, #ffca28);
+            color: var(--md-sys-color-primary);
             line-height: 1;
         }
 
@@ -748,15 +752,15 @@ function getThreadNotesStyles() {
             justify-content: center;
             border: none;
             cursor: pointer;
-            color: #fff;
+            color: var(--md-sys-color-on-primary);
         }
 
         .thread-note-row .swipe-btn--edit {
-            background: #2196f3;
+            background: var(--md-sys-color-primary);
         }
 
         .thread-note-row .swipe-btn--delete {
-            background: #f44336;
+            background: var(--md-sys-color-error);
         }
 
         .thread-note-row .thread-note {
@@ -788,8 +792,8 @@ function getThreadNotesStyles() {
 
         .thread-note-edit-input {
             width: 100%;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--md-sys-color-surface-container);
+            border: 1px solid var(--md-sys-color-outline-variant);
             border-radius: 8px;
             padding: 8px 10px;
             color: inherit;
@@ -801,7 +805,7 @@ function getThreadNotesStyles() {
 
         .thread-note-edit-input:focus {
             outline: none;
-            border-color: rgba(255, 202, 40, 0.5);
+            border-color: var(--md-sys-color-primary);
         }
 
         .thread-note-edit-actions {
@@ -820,14 +824,14 @@ function getThreadNotesStyles() {
         }
 
         .thread-note-edit-save {
-            background: #ffca28;
-            color: #1a1a1a;
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
         }
 
         .thread-note-edit-cancel {
             background: transparent;
-            color: #aaa;
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            color: var(--md-sys-color-on-surface-variant);
+            border: 1px solid var(--md-sys-color-outline-variant) !important;
         }
     `;
 }
