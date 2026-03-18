@@ -82,16 +82,18 @@ match /notes/{noteId} {
   allow create: if createsOwnResource(request.resource)
     && validStringLength(request.resource.data.title, 500)
     && validStringLength(request.resource.data.content, 100000)
-    && request.resource.data.keys().hasAll(['userId', 'title', 'content', 'createdAt', 'updatedAt'])
+    && request.resource.data.keys().hasAll(['userId', 'title', 'content', 'folderId', 'createdAt', 'updatedAt'])
     && validTimestamp(request.resource.data.createdAt)
-    && validTimestamp(request.resource.data.updatedAt);
+    && validTimestamp(request.resource.data.updatedAt)
+    && (request.resource.data.folderId == null || request.resource.data.folderId is string);
   allow read: if ownsResource(resource);
   allow delete: if ownsResource(resource);
   allow update: if ownsResource(resource)
     && request.resource.data.userId == resource.data.userId
     && validStringLength(request.resource.data.title, 500)
     && validStringLength(request.resource.data.content, 100000)
-    && validTimestamp(request.resource.data.updatedAt);
+    && validTimestamp(request.resource.data.updatedAt)
+    && (request.resource.data.folderId == null || request.resource.data.folderId is string);
 }
 
 match /noteFolders/{folderId} {
