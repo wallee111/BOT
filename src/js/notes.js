@@ -492,30 +492,157 @@ function insertChecklist() {
     if (!sel || !sel.rangeCount) return;
 
     const range = sel.getRangeAt(0);
-    const li = document.createElement('li');
-    li.className = 'notes-checklist-item';
-    li.innerHTML = '<input type="checkbox"><span> </span>';
-
-    // Try to insert after current block
-    const container = range.commonAncestorContainer;
-    const block = container.nodeType === Node.TEXT_NODE
+    const container = range.startContainer;
+    const node = container.nodeType === Node.TEXT_NODE
         ? container.parentElement
         : container;
 
-    const parentEl = block.closest('[contenteditable]');
-    if (parentEl && parentEl === notesEditorContent) {
+    // Check if cursor is already inside a checklist item → toggle off
+    const existingItem = node.closest('.notes-checklist-item');
+    if (existingItem) {
+        removeChecklistItem(existingItem);
+        return;
+    }
+
+    // Find the current block element (div, p, or direct child of editor)
+    let block = node;
+    while (block && block !== notesEditorContent && block.parentElement !== notesEditorContent) {
+        block = block.parentElement;
+    }
+    if (!block || block === notesEditorContent) {
+        // Cursor is directly in the editor with no block wrapper — use the range container
+        block = null;
+    }
+
+    // Create the checklist item
+    const li = document.createElement('div');
+    li.className = 'notes-checklist-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    const span = document.createElement('span');
+    span.setAttribute('contenteditable', 'true');
+
+    if (block) {
+        // Preserve existing text content from the current block
+        span.innerHTML = block.innerHTML || '\u200B';
+        li.appendChild(checkbox);
+        li.appendChild(span);
+        block.replaceWith(li);
+    } else {
+        span.innerHTML = '\u200B';
+        li.appendChild(checkbox);
+        li.appendChild(span);
         range.deleteContents();
         range.insertNode(li);
-        // Move cursor into span
-        const span = li.querySelector('span');
-        if (span) {
-            const newRange = document.createRange();
-            newRange.setStart(span, 0);
-            newRange.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
-        }
     }
+
+    // Place cursor in span
+    placeCursorInSpan(span);
+}
+
+function removeChecklistItem(item) {
+    const span = item.querySelector('span');
+    const text = span ? span.innerHTML : '';
+    const div = document.createElement('div');
+    // If the span only had a zero-width space, make it a true empty line
+    div.innerHTML = (text === '\u200B' || text === '') ? '<br>' : text;
+    item.replaceWith(div);
+
+    // Place cursor in the new div
+    const sel = window.getSelection();
+    const newRange = document.createRange();
+    if (div.firstChild) {
+        if (div.firstChild.nodeType === Node.TEXT_NODE) {
+            newRange.setStart(div.firstChild, div.firstChild.textContent.length);
+        } else {
+            newRange.setStart(div, 0);
+        }
+    } else {
+        newRange.setStart(div, 0);
+    }
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+}
+
+function placeCursorInSpan(span) {
+    const sel = window.getSelection();
+    const newRange = document.createRange();
+    // Place cursor at end of span content
+    if (span.firstChild) {
+        newRange.setStart(span.firstChild, span.firstChild.nodeType === Node.TEXT_NODE ? span.firstChild.textContent.length : 0);
+    } else {
+        newRange.setStart(span, 0);
+    }
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+}
+
+function handleChecklistEnter(e) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+
+    const range = sel.getRangeAt(0);
+    const container = range.startContainer;
+    const node = container.nodeType === Node.TEXT_NODE
+        ? container.parentElement
+        : container;
+
+    const checklistItem = node.closest('.notes-checklist-item');
+    if (!checklistItem) return false;
+
+    e.preventDefault();
+
+    const span = checklistItem.querySelector('span');
+    const textContent = span ? span.textContent.replace(/\u200B/g, '').trim() : '';
+
+    // If the current item is empty, remove it and exit checklist mode (double-Enter)
+    if (!textContent) {
+        removeChecklistItem(checklistItem);
+        return true;
+    }
+
+    // Split content at cursor position: keep text before cursor in current item,
+    // move text after cursor to new item
+    const currentRange = sel.getRangeAt(0);
+    let afterContent = '';
+    if (span && span.contains(currentRange.startContainer)) {
+        const afterRange = document.createRange();
+        afterRange.setStart(currentRange.startContainer, currentRange.startOffset);
+        afterRange.setEndAfter(span.lastChild || span);
+        const fragment = afterRange.extractContents();
+        const temp = document.createElement('div');
+        temp.appendChild(fragment);
+        afterContent = temp.innerHTML;
+    }
+
+    // Create new checklist item
+    const newItem = document.createElement('div');
+    newItem.className = 'notes-checklist-item';
+    const newCheckbox = document.createElement('input');
+    newCheckbox.type = 'checkbox';
+    const newSpan = document.createElement('span');
+    newSpan.setAttribute('contenteditable', 'true');
+    newSpan.innerHTML = afterContent || '\u200B';
+    newItem.appendChild(newCheckbox);
+    newItem.appendChild(newSpan);
+
+    // Insert after current item
+    checklistItem.after(newItem);
+
+    // Place cursor at start of new span
+    const newRange = document.createRange();
+    if (newSpan.firstChild) {
+        newRange.setStart(newSpan.firstChild, 0);
+    } else {
+        newRange.setStart(newSpan, 0);
+    }
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+
+    return true;
 }
 
 function execToolbarCommand(cmd) {
@@ -646,8 +773,16 @@ function wireEvents() {
         execToolbarCommand(btn.dataset.cmd);
     });
 
-    // Keyboard shortcuts: Ctrl/Cmd+B, Ctrl/Cmd+I, Tab indent
+    // Keyboard shortcuts: Enter (checklist), Ctrl/Cmd+B, Ctrl/Cmd+I, Tab indent
     notesEditorContent.addEventListener('keydown', (e) => {
+        // Enter inside checklist item → continue or exit checklist
+        if (e.key === 'Enter' && !e.shiftKey) {
+            if (handleChecklistEnter(e)) {
+                scheduleSave();
+                return;
+            }
+        }
+
         // Tab / Shift+Tab → indent / outdent (desktop only)
         if (e.key === 'Tab') {
             e.preventDefault();

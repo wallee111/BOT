@@ -474,8 +474,20 @@
     font-size: 0.9375rem;
     line-height: 1.6;
     color: var(--md-sys-color-on-surface);
+    caret-color: var(--md-sys-color-on-surface);
     outline: none;
     min-height: 200px;
+}
+
+/* Ensure empty lines have height so the caret is visible */
+.notes-editor-content > div:empty,
+.notes-editor-content > p:empty {
+    min-height: 1.5em;
+}
+
+.notes-editor-content > br:only-child {
+    display: block;
+    min-height: 1.5em;
 }
 
 .notes-editor-content:empty::before {
@@ -519,11 +531,12 @@
 /* Checklist items */
 .notes-checklist-item {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     gap: 8px;
     margin: 0.25em 0;
     padding: 0;
     list-style: none;
+    min-height: 1.5em;
 }
 
 .notes-checklist-item input[type="checkbox"] {
@@ -532,7 +545,15 @@
     height: 15px;
     accent-color: var(--md-sys-color-primary);
     cursor: pointer;
-    margin-top: 2px;
+    margin-top: 3px;
+}
+
+.notes-checklist-item > span {
+    flex: 1;
+    min-width: 0;
+    outline: none;
+    line-height: 1.5;
+    min-height: 1.5em;
 }
 
 .notes-checklist-item.is-checked > span {
