@@ -299,3 +299,4 @@ This changes the bottom nav from 5 items to 6. The "Categories" item will be rem
 - Auto-save debounce behavior
 - contentEditable formatting commands
 - Empty states (no folders, no notes, no search results)
+ 
