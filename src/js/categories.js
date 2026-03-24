@@ -1,13 +1,7 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
-import {
-    getIdeas,
-    getCategoryPalette,
-    renameCategory,
-    setCategoryColor,
-    setCategoryVisibility,
-    subscribeToIdeas
-} from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas, categories } = storage;
 import { getReadableTextColor, HEX_COLOR_PATTERN, escapeHtml } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 
@@ -714,7 +708,7 @@ function createCategoryItem({ name, count }) {
         try {
             // Handle name change
             if (newName !== currentName) {
-                await renameCategory(currentName, newName);
+                await categories.renameCategory(currentName, newName);
                 currentName = newName;
                 categoryNameInput.dataset.originalName = newName;
             }
@@ -722,7 +716,7 @@ function createCategoryItem({ name, count }) {
             // Handle color change
             const originalColor = (display.customColor || display.fallbackColor).toLowerCase();
             if (newColor !== originalColor) {
-                await setCategoryColor(currentName, newColor);
+                await categories.setColor(currentName, newColor);
             }
 
             await loadData({ force: true });
@@ -743,7 +737,7 @@ function createCategoryItem({ name, count }) {
         const newVisibility = !currentDisplay.visible;
 
         try {
-            await setCategoryVisibility(currentName, newVisibility);
+            await categories.setVisibility(currentName, newVisibility);
 
             // Update button state
             visibilityBtn.setAttribute('aria-label', newVisibility ? 'Hide from active feed' : 'Show in active feed');
@@ -782,7 +776,7 @@ function renderCategoryList(items) {
 async function loadData(options = {}) {
     try {
         // Get all ideas and build category stats
-        const rawIdeas = await getIdeas({ force: options.force });
+        const rawIdeas = await ideas.getAll({ force: options.force });
         const ideas = Array.isArray(rawIdeas) ? rawIdeas : [];
         // Split active vs archived
         const activeIdeas = ideas.filter(i => !i.archived);
@@ -812,7 +806,7 @@ async function loadData(options = {}) {
         });
 
         // Get category palette (colors)
-        paletteCache = await getCategoryPalette({ force: options.force });
+        paletteCache = await categories.getPalette({ force: options.force });
 
         // Create category list items
         const categoryItems = Object.entries(activeCategoryStats).map(([name, count]) => ({ name, count }));
@@ -960,7 +954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     await loadData();
 
-    const unsubIdeas = subscribeToIdeas((_ideas) => {
+    const unsubIdeas = ideas.subscribe((_ideas) => {
         loadData(); // re-aggregate category stats when ideas change
     });
     window.addEventListener('beforeunload', () => unsubIdeas());

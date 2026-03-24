@@ -1,5 +1,6 @@
 import { normalizeCategories } from '../lib/utils.js';
-import { setIdeaCategories } from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas } = storage;
 
 /**
  * Creates a category dropdown controller that manages positioning, populating,
@@ -96,7 +97,7 @@ export function createCategoryDropdownController(config) {
             try {
                 const targetLower = (targetCategory || '').trim().toLowerCase();
                 const next = normalized.filter(c => (c || '').trim().toLowerCase() !== targetLower);
-                await setIdeaCategories(ideaId, next);
+                await ideas.setCategories(ideaId, next);
                 await config.onCategoriesChanged();
             } catch (e) {
                 console.error('Failed to remove category', e);
@@ -147,7 +148,7 @@ export function createCategoryDropdownController(config) {
                         seen.add(key);
                         return true;
                     });
-                    await setIdeaCategories(ideaId, next);
+                    await ideas.setCategories(ideaId, next);
                     await config.onCategoriesChanged();
                 } catch (e) {
                     console.error('Failed to replace category', e);
@@ -208,7 +209,7 @@ export function createCategoryDropdownController(config) {
 
             try {
                 if (currentIdeaId) {
-                    await setIdeaCategories(currentIdeaId, selected);
+                    await ideas.setCategories(currentIdeaId, selected);
                     await config.onCategoriesChanged();
                     if (anchor) position(anchor);
                 }
@@ -240,7 +241,7 @@ export function createCategoryDropdownController(config) {
                     .map(cb => cb.dataset.category)
                     .filter(c => c && c !== '__uncategorized__');
                 try {
-                    await setIdeaCategories(currentIdeaId, selected);
+                    await ideas.setCategories(currentIdeaId, selected);
                     await config.onCategoriesChanged();
                 } catch (e) {
                     console.error('Saving categories failed:', e);

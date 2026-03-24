@@ -4,14 +4,8 @@ import "../styles/style.v1.css";
 import "../styles/notes.css";
 
 // ── Module imports ─────────────────────────────────────────────
-import {
-    subscribeToPageNotes,
-    savePageNote,
-    deletePageNote,
-    subscribeToNoteFolders,
-    saveNoteFolder,
-    deleteNoteFolder,
-} from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { pageNotes, noteFolders } = storage;
 import { ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
 import { showConfirmDialog } from '../lib/confirm-dialog.js';
@@ -287,7 +281,7 @@ function scheduleSave() {
 
         isSaving = true;
         try {
-            await savePageNote({
+            await pageNotes.save({
                 ...note,
                 title: notesEditorTitle.textContent.trim(),
                 content: notesEditorContent.innerHTML,
@@ -331,7 +325,7 @@ function selectNote(noteId) {
 
 async function createNote() {
     try {
-        const newNote = await savePageNote({
+        const newNote = await pageNotes.save({
             title: '',
             content: '',
             folderId: state.activeFolderId,
@@ -360,7 +354,7 @@ async function deleteCurrentNote() {
     if (!confirmed) return;
 
     try {
-        await deletePageNote(noteId);
+        await pageNotes.delete(noteId);
         state.activeNoteId = null;
         notesEditorContent.removeAttribute('data-note-id');
         notesEditorContent.removeAttribute('data-loaded');
@@ -379,7 +373,7 @@ async function createFolder() {
     const name = prompt('Folder name:');
     if (!name || !name.trim()) return;
     try {
-        await saveNoteFolder({ name: name.trim(), sortOrder: state.folders.length });
+        await noteFolders.save({ name: name.trim(), sortOrder: state.folders.length });
         showToast(`Folder "${name.trim()}" created`);
     } catch (err) {
         console.error('[notes] createFolder error:', err);
@@ -393,7 +387,7 @@ async function renameFolder(folderId) {
     const newName = prompt('Rename folder:', folder.name);
     if (!newName || !newName.trim() || newName.trim() === folder.name) return;
     try {
-        await saveNoteFolder({ ...folder, name: newName.trim() });
+        await noteFolders.save({ ...folder, name: newName.trim() });
         showToast(`Renamed to "${newName.trim()}"`);
     } catch (err) {
         console.error('[notes] renameFolder error:', err);
@@ -409,7 +403,7 @@ async function deleteFolderAction(folderId) {
     );
     if (!confirmed) return;
     try {
-        await deleteNoteFolder(folderId);
+        await noteFolders.delete(folderId);
         if (state.activeFolderId === folderId) {
             state.activeFolderId = null;
         }
@@ -476,7 +470,7 @@ async function moveNoteToFolder(targetFolderId) {
     hideMoveMenu();
 
     try {
-        await savePageNote({ ...note, folderId: newFolderId });
+        await pageNotes.save({ ...note, folderId: newFolderId });
         const folderName = getFolderName(newFolderId);
         showToast(folderName ? `Moved to "${folderName}"` : 'Moved to All Notes');
     } catch (err) {
@@ -906,7 +900,7 @@ function wireEvents() {
         if (note.folderId === newFolderId) return; // already in this folder
 
         try {
-            await savePageNote({ ...note, folderId: newFolderId });
+            await pageNotes.save({ ...note, folderId: newFolderId });
             const folderName = getFolderName(newFolderId);
             showToast(folderName ? `Moved to "${folderName}"` : 'Moved to All Notes');
         } catch (err) {
@@ -930,7 +924,7 @@ async function init() {
     setMobileView('folders');
 
     // Subscribe to folders
-    unsubscribeFolders = subscribeToNoteFolders((folders) => {
+    unsubscribeFolders = noteFolders.subscribe((folders) => {
         state.folders = folders;
         renderFolders();
         renderNotesList();
@@ -939,7 +933,7 @@ async function init() {
     });
 
     // Subscribe to notes — skip editor re-render while saving
-    unsubscribeNotes = subscribeToPageNotes((notes) => {
+    unsubscribeNotes = pageNotes.subscribe((notes) => {
         state.notes = notes;
         renderFolders();
         renderNotesList();
