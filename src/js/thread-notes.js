@@ -4,7 +4,8 @@
  * Supports inline expansion on mobile and detail pane on desktop
  */
 
-import { subscribeToNotes, addNote, getNoteCount, getNotesFromLocal, deleteNote, updateNoteText } from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { threadNotes } = storage;
 import { escapeHtml, formatTime } from '../lib/utils.js';
 import { showToast } from '../lib/toast.js';
 import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
@@ -136,7 +137,7 @@ export function attachThread(ideaEl, ideaId) {
     // Initialize state
     threadStates.set(ideaId, {
         isOpen: false,
-        notes: getNotesFromLocal(ideaId),
+        notes: threadNotes.getCached(ideaId),
         unsubscribe: null,
         container: threadContainer
     });
@@ -152,7 +153,7 @@ export function attachThread(ideaEl, ideaId) {
  * Update the note count badge on the thread button
  */
 export function updateNoteCount(ideaEl, ideaId) {
-    const count = getNoteCount(ideaId);
+    const count = threadNotes.getCount(ideaId);
     const btn = ideaEl.querySelector(`.idea-thread[data-thread-id="${ideaId}"]`);
     if (!btn) return;
 
@@ -233,7 +234,7 @@ async function handleSubmit(ideaEl, ideaId) {
     if (sendBtn) sendBtn.disabled = true;
 
     try {
-        await addNote(ideaId, text);
+        await threadNotes.add(ideaId, text);
 
         // Clear input on success
         if (input) {
@@ -269,7 +270,7 @@ export function openThread(ideaId) {
     }
 
     // Subscribe to notes
-    state.unsubscribe = subscribeToNotes(
+    state.unsubscribe = threadNotes.subscribe(
         ideaId,
         (notes) => {
             state.notes = notes;
@@ -496,7 +497,7 @@ function renderNotes(ideaId, notes) {
             row.style.opacity = '0.5';
             row.style.pointerEvents = 'none';
             try {
-                await deleteNote(rowIdeaId, noteId);
+                await threadNotes.delete(rowIdeaId, noteId);
                 showToast('Note deleted', {
                     timeout: 5000,
                     action: {
@@ -558,7 +559,7 @@ function openNoteInlineEditor(row, ideaId, noteId) {
         if (!newText || newText === originalText) { closeEditor(); return; }
 
         try {
-            await updateNoteText(ideaId, noteId, newText);
+            await threadNotes.update(ideaId, noteId, newText);
             textEl.textContent = newText;
             showToast('Note updated', { timeout: 1500 });
         } catch (err) {

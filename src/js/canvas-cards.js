@@ -10,7 +10,8 @@
  */
 
 import { getCategoryAppearance, escapeHtml, normalizeCategories, formatTime, extractTags, highlightTags } from '../lib/utils.js';
-import { setIdeaArchived, setIdeaPinned, deleteIdea, updateIdeaText, updateIdeaPriority, saveIdea } from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas } = storage;
 import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
 import { updateNoteCount } from './thread-notes.js';
 import { showToast } from '../lib/toast.js';
@@ -243,7 +244,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 row.style.opacity = '0.5';
                 row.style.pointerEvents = 'none';
                 try {
-                    await deleteIdea(ideaId);
+                    await ideas.delete(ideaId);
                     showToast('Idea deleted', { timeout: 2000 });
                 } catch (err) {
                     console.error('Failed to delete idea:', err);
@@ -258,14 +259,14 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 row.style.opacity = '0.5';
                 row.style.pointerEvents = 'none';
                 try {
-                    await setIdeaArchived(ideaId, true);
+                    await ideas.setArchived(ideaId, true);
                     showToast('Idea archived', {
                         timeout: 5000,
                         action: {
                             label: 'Undo',
                             onClick: async () => {
                                 try {
-                                    await setIdeaArchived(ideaId, false);
+                                    await ideas.setArchived(ideaId, false);
                                     showToast('Restored', { timeout: 1500 });
                                 } catch (undoErr) {
                                     console.error('Failed to undo archive:', undoErr);
@@ -352,7 +353,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             try {
                 const id = crypto.randomUUID?.() || `idea-${Date.now()}-${Math.random().toString(16).slice(2)}`;
                 const tags = extractTags(text);
-                await saveIdea({
+                await ideas.save({
                     id,
                     text,
                     category: categoryName,
@@ -479,7 +480,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 }
 
                 try {
-                    await updateIdeaPriority(dot.dataset.id, next);
+                    await ideas.updatePriority(dot.dataset.id, next);
                 } catch (err) {
                     console.error('Failed to update priority:', err);
                 }
@@ -495,7 +496,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
                 const isPinned = btn.dataset.pinned === 'true';
                 btn.disabled = true;
                 try {
-                    await setIdeaPinned(btn.dataset.id, !isPinned);
+                    await ideas.setPinned(btn.dataset.id, !isPinned);
                     btn.dataset.pinned = String(!isPinned);
                     btn.setAttribute('aria-pressed', String(!isPinned));
                     btn.classList.toggle('is-active', !isPinned);
@@ -545,7 +546,7 @@ export function createCardManager(surfaceEl, engine, options = {}) {
             }
             try {
                 const tags = extractTags(newText);
-                await updateIdeaText(ideaId, newText, tags);
+                await ideas.updateText(ideaId, newText, tags);
                 textEl.innerHTML = highlightTags(newText);
                 showToast('Saved', { timeout: 1500 });
             } catch (err) {

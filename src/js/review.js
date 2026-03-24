@@ -1,18 +1,7 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
-import {
-    getIdeas,
-    subscribeToIdeas,
-    deleteIdea,
-    getCategories,
-    setIdeaCategories,
-    getCategoryPalette,
-    setIdeaArchived,
-    setIdeaPinned,
-    updateIdeaText,
-    updateIdeaPriority,
-    subscribeToCategorySettings,
-} from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas, categories } = storage;
 import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime, formatTextContent } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
@@ -303,7 +292,7 @@ async function closeCategoryModal() {
             .map(cb => cb.dataset.category);
 
         try {
-            await setIdeaCategories(currentModalIdeaId, selectedCategories);
+            await ideas.setCategories(currentModalIdeaId, selectedCategories);
             // Refresh the UI to show updated categories
             await Promise.all([
                 refreshIdeas({ force: true }),
@@ -325,7 +314,7 @@ async function closeCategoryModal() {
 
 async function updateCategoryList() {
     const previouslySelected = new Set(Array.from(cat?.selectedOptions || []).map(opt => opt.value));
-    const categories = normalizeCategories(await getCategories()).sort((a, b) => CATEGORY_COLLATOR.compare(a, b));
+    const categories = normalizeCategories(await ideas.getUniqueCategories()).sort((a, b) => CATEGORY_COLLATOR.compare(a, b));
     cat.innerHTML = '';
 
     const uncategorizedOption = document.createElement('option');
@@ -448,13 +437,13 @@ function render() {
 }
 
 async function refreshIdeas(options = {}) {
-    ideasCache = await getIdeas(options);
+    ideasCache = await ideas.getAll(options);
     render();
 }
 
 async function refreshCategoryPalette(options = {}) {
     try {
-        const palette = await getCategoryPalette({ force: Boolean(options.force) });
+        const palette = await categories.getPalette({ force: Boolean(options.force) });
         categoryPalette = palette || {};
         // Only render if ideas are loaded
         if (ideasCache && ideasCache.length >= 0) {
@@ -586,7 +575,7 @@ async function archiveIdeaFromSwipe(item) {
     item.classList.add('swipe-item--archiving');
     closeSwipeItem(item);
     try {
-        await setIdeaArchived(ideaId, !currentlyArchived);
+        await ideas.setArchived(ideaId, !currentlyArchived);
         await refreshIdeas({ force: true });
         await updateCategoryList();
 
@@ -599,7 +588,7 @@ async function archiveIdeaFromSwipe(item) {
                 onClick: async () => {
                     try {
                         // Revert the action
-                        await setIdeaArchived(ideaId, currentlyArchived);
+                        await ideas.setArchived(ideaId, currentlyArchived);
                         await refreshIdeas({ force: true });
                         await updateCategoryList();
                         showToast('Action undone', { tone: 'info', timeout: 2000 });
@@ -643,7 +632,7 @@ list.addEventListener('click', async e => {
         const isPinned = pinBtn.dataset.pinned === 'true';
         pinBtn.disabled = true;
         try {
-            await setIdeaPinned(id, !isPinned);
+            await ideas.setPinned(id, !isPinned);
             pinBtn.dataset.pinned = String(!isPinned);
             pinBtn.setAttribute('aria-pressed', String(!isPinned));
             pinBtn.classList.toggle('is-active', !isPinned);
@@ -669,7 +658,7 @@ list.addEventListener('click', async e => {
 
         priorityDot.disabled = true;
         try {
-            await updateIdeaPriority(id, nextPriority);
+            await ideas.updatePriority(id, nextPriority);
             // Update UI immediately
             priorityDot.textContent = PRIORITY_BADGES[nextPriority] || '⚫';
             priorityDot.dataset.priority = nextPriority;
@@ -741,7 +730,7 @@ list.addEventListener('click', async e => {
         saveBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
         try {
-            await updateIdeaText(ideaId, newValue);
+            await ideas.updateText(ideaId, newValue);
             ideasCache = ideasCache.map(idea =>
                 idea.id === ideaId ? { ...idea, text: newValue } : idea
             );
@@ -770,7 +759,7 @@ list.addEventListener('click', async e => {
         const confirmed = await showConfirmDialog('Delete this idea permanently?');
         if (!confirmed) return;
         try {
-            await deleteIdea(del);
+            await ideas.delete(del);
             await Promise.all([updateCategoryList(), refreshIdeas({ force: true })]);
             await refreshCategoryPalette({ force: true });
         } catch (error) {
@@ -944,7 +933,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Set up real-time listener for ideas (after auth succeeds)
-    const unsubscribe = subscribeToIdeas((ideas) => {
+    const unsubscribe = ideas.subscribe((ideas) => {
         ideasCache = ideas;
         render();
     });

@@ -1,14 +1,8 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
 import "../styles/canvas.css";
-import {
-    getCategoryPalette,
-    subscribeToIdeas,
-    loadCanvasLayout,
-    saveCanvasLayout,
-    subscribeToCanvasLayout,
-    subscribeToCategorySettings,
-} from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas, categories, canvas } = storage;
 import { getCategoryAppearance, escapeHtml } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
@@ -179,8 +173,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 7. Load fresh data from Firestore (reconcile with cache)
     const [savedLayout, palette] = await Promise.all([
-        loadCanvasLayout(),
-        getCategoryPalette(),
+        canvas.load(),
+        categories.getPalette(),
     ]);
 
     // Update layout if Firestore has newer data
@@ -211,14 +205,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     layoutLoaded = true;
 
     // 8. Real-time listeners as single source of truth
-    const unsubscribe = subscribeToIdeas((ideas) => {
+    const unsubscribe = ideas.subscribe((ideas) => {
         allIdeas = ideas;
         cardManager.updateAllCards(ideas, categoryPalette);
     });
 
     // 9. Real-time canvas layout listener — receives changes from other devices.
     //    The isSavingLocally guard suppresses the echo of our own writes.
-    const unsubLayout = subscribeToCanvasLayout((remoteLayout) => {
+    const unsubLayout = canvas.subscribe((remoteLayout) => {
         if (isSavingLocally) return;
         if (JSON.stringify(remoteLayout) === JSON.stringify(layout)) return;
 
@@ -241,7 +235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 10. Real-time category settings listener — keeps palette current across devices.
-    const unsubCategorySettings = subscribeToCategorySettings((palette) => {
+    const unsubCategorySettings = categories.subscribe((palette) => {
         categoryPalette = palette;
         cardManager.updateAllCards(allIdeas, categoryPalette);
     });
@@ -260,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-        getCategoryPalette({ force: true }).then(palette => {
+        categories.getPalette({ force: true }).then(palette => {
             categoryPalette = palette;
             cardManager?.updateAllCards(allIdeas, categoryPalette);
         }).catch(console.error);
@@ -326,7 +320,7 @@ function debouncedSave() {
     saveTimer = setTimeout(() => {
         layout.viewport = engine.getState();
         isSavingLocally = true;
-        saveCanvasLayout(layout);
+        canvas.save(layout);
         // Reset the guard after the Firestore round-trip completes.
         // saveCanvasLayout has its own 1500 ms internal debounce before the write fires,
         // leaving only ~500 ms of this 2 s window for the actual network round-trip.

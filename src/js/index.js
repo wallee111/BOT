@@ -1,20 +1,7 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
-import {
-    saveIdea,
-    getCategories,
-    subscribeToIdeas,
-    setIdeaArchived,
-    setIdeaHidden,
-    getCategoryPalette,
-    setIdeaPinned,
-    trackCategoryUsage,
-    getCategoriesByRecentUsage,
-    updateIdeaPriority,
-    deleteIdea,
-    updateIdeaText,
-    subscribeToCategorySettings,
-} from '../lib/storage.js';
+import { storage } from '../lib/storage/index.js';
+const { ideas, categories } = storage;
 import {
     escapeHtml,
     getCategoryAppearance,
@@ -131,15 +118,15 @@ async function initialize() {
     refreshCategoryPalette().catch(console.error);
 
     // 4. Subscribe to real-time listener as single source of truth
-    // This replaces the old pattern of getIdeas() + subscribeToIdeas() (double fetch)
-    const unsubscribe = subscribeToIdeas((ideas) => {
+    // This replaces the old pattern of getIdeas() + ideas.subscribe() (double fetch)
+    const unsubscribe = ideas.subscribe((ideas) => {
         state.allIdeas = ideas;
         updateCategoryList().catch(console.error);
         renderDashboard(ideas);
     });
 
     // 5. Real-time category settings listener — keeps palette current across devices.
-    const unsubCategorySettings = subscribeToCategorySettings((palette) => {
+    const unsubCategorySettings = categories.subscribe((palette) => {
         state.categoryPalette = palette;
         if (state.allIdeas.length) renderDashboard(state.allIdeas);
     });
@@ -242,8 +229,8 @@ async function handleIdeaSave(e) {
     };
 
     try {
-        await saveIdea(idea);
-        if (idea.category) trackCategoryUsage(idea.category);
+        await ideas.save(idea);
+        if (idea.category) categories.trackUsage(idea.category);
         textInput.value = '';
         textInput.style.height = 'auto';
         if (categoryNew) categoryNew.value = '';
@@ -764,7 +751,7 @@ function renderIdeaList(container, list, { hiddenView = false } = {}) {
             row.style.opacity = '0.5';
             row.style.pointerEvents = 'none';
             try {
-                await deleteIdea(ideaId);
+                await ideas.delete(ideaId);
                 showToast('Idea deleted', { timeout: 2000 });
             } catch (err) {
                 console.error('Failed to delete idea:', err);
@@ -779,14 +766,14 @@ function renderIdeaList(container, list, { hiddenView = false } = {}) {
             row.style.opacity = '0.5';
             row.style.pointerEvents = 'none';
             try {
-                await setIdeaArchived(ideaId, true);
+                await ideas.setArchived(ideaId, true);
                 showToast('Idea archived', {
                     timeout: 5000,
                     action: {
                         label: 'Undo',
                         onClick: async () => {
                             try {
-                                await setIdeaArchived(ideaId, false);
+                                await ideas.setArchived(ideaId, false);
                                 showToast('Restored', { timeout: 1500 });
                             } catch { showToast('Failed to undo', { tone: 'error' }); }
                         }
@@ -838,7 +825,7 @@ function openInlineEditor(row, ideaId) {
         }
         try {
             const tags = extractTags(newText);
-            await updateIdeaText(ideaId, newText, tags);
+            await ideas.updateText(ideaId, newText, tags);
             textEl.innerHTML = formatTextContent(newText);
             showToast('Saved', { timeout: 1500 });
         } catch (err) {
@@ -880,7 +867,7 @@ const categoryDropdown = createCategoryDropdownController({
 
 async function refreshCategoryPalette(options = {}) {
     try {
-        state.categoryPalette = await getCategoryPalette({ force: !!options.force }) || {};
+        state.categoryPalette = await categories.getPalette({ force: !!options.force }) || {};
         if (state.allIdeas.length) renderDashboard(state.allIdeas);
     } catch (e) {
         console.error('Unable to load category palette', e);
@@ -888,12 +875,12 @@ async function refreshCategoryPalette(options = {}) {
 }
 
 async function updateCategoryList() {
-    const categories = await getCategories();
+    const categories = await ideas.getUniqueCategories();
     const paletteCategories = Object.keys(state.categoryPalette || {});
     const combined = Array.from(new Set([...categories, ...paletteCategories])).filter(Boolean);
     state.availableCategories = combined.slice();
 
-    const sorted = getCategoriesByRecentUsage(combined);
+    const sorted = categories.getByRecentUsage(combined);
     const current = categorySelect?.value;
 
     if (categorySelect) {
@@ -924,7 +911,7 @@ document.addEventListener('click', (e) => {
         const id = pinBtn.dataset.id;
         const isPinned = pinBtn.dataset.pinned === 'true';
         pinBtn.disabled = true;
-        setIdeaPinned(id, !isPinned)
+        ideas.setPinned(id, !isPinned)
             .catch(err => console.error('Unable to pin', err))
             .finally(() => { pinBtn.disabled = false; });
         return;
@@ -936,7 +923,7 @@ document.addEventListener('click', (e) => {
         const id = hideBtn.dataset.id;
         const action = hideBtn.dataset.action;
         hideBtn.disabled = true;
-        setIdeaHidden(id, action === 'hide')
+        ideas.setHidden(id, action === 'hide')
             .catch(err => console.error('Unable to hide', err))
             .finally(() => { hideBtn.disabled = false; });
         return;
@@ -952,7 +939,7 @@ document.addEventListener('click', (e) => {
         const nextPriority = PRIORITY_CYCLE[nextIndex];
 
         priorityDot.disabled = true;
-        updateIdeaPriority(id, nextPriority)
+        ideas.updatePriority(id, nextPriority)
             .then(() => {
                 priorityDot.textContent = PRIORITY_BADGES[nextPriority] || '\u26AB';
                 priorityDot.dataset.priority = nextPriority;
