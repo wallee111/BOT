@@ -186,11 +186,20 @@ categories.cleanupUnused(deletedCategories): Promise
 ```
 
 **Cross-store wiring in `createStorage`**:
+
+The ideas and categories stores accept optional callback slots for cross-domain operations. These are wired after all stores are created:
+
 ```js
-// After creating both stores, wire the cross-domain callbacks
-ideas._onCategoriesOrphaned = (cats) => categories.cleanupUnused(cats);
-categories._getIdeas = () => ideas.getCached();
+// In createStorage(), after creating all stores:
+ideas.onCategoriesOrphaned = (cats) => categories.cleanupUnused(cats);
+categories.getIdeasForRename = () => ideas.getCached();
 ```
+
+**Call sites**:
+- `ideas.delete(id)` — after successful deletion, checks if any categories became orphaned. If so, calls `onCategoriesOrphaned(orphanedCategories)` which triggers category setting cleanup + `categoryDeleted` event.
+- `categories.rename(from, to)` — calls `getIdeasForRename()` to get current ideas, filters for matching categories, then batch-updates via `writeBatch` (500-op chunks).
+
+Both callbacks are optional (guarded with `?.()`) so the stores work independently in tests without wiring.
 
 #### Client-side category helpers
 
@@ -207,7 +216,7 @@ The current `getCategories()` extracts unique category names from the ideas cach
 
 #### Shared utilities (used by all shapes)
 
-- `createLocalCache(key, ttl, localStorage)` — read/write/TTL check/optimistic update for localStorage + in-memory cache. Supports an optional `writeDebounce` (ms) parameter — the current ideas cache write is debounced at 150ms.
+- `createLocalCache(key, ttl, localStorage)` — read/write/TTL check/optimistic update for localStorage + in-memory cache. Supports an optional `writeDebounce` (ms) parameter (default: 0, no debounce). Only the ideas store uses debounce (150ms); all other domains write synchronously.
 - `withAuthGate(deps.auth, fn)` — wraps a function to no-op if no user is authenticated. Note: `deps.auth.getCurrentUserId` is async (returns `Promise<string|null>`).
 - `generateLocalId(prefix)` — shared ID generator using `crypto.randomUUID` with fallback.
 
@@ -236,7 +245,18 @@ threadNotes.getCached(ideaId): Note[]
 
 ThreadNotes does NOT use the mutation queue. It performs direct Firestore calls with manual optimistic update and revert-on-failure (matching current behavior).
 
-**Subscribe behavior**: Thread notes and page notes emit cached data immediately before setting up the Firestore listener (fire cached first, then live updates). The `createDomainStore` base for collection-type stores does NOT do this — ideas uses snapshot-only. This difference must be preserved in each domain's implementation.
+**Subscribe behavior by domain**:
+
+| Domain | Emits cached data before listener? |
+|--------|-----------------------------------|
+| ideas | No — snapshot-only |
+| pageNotes | Yes — cached first, then live |
+| noteFolders | Yes — cached first, then live |
+| categories | No — snapshot-only |
+| canvas | No — snapshot-only |
+| threadNotes | Yes — cached first, then live |
+
+For the three collection-shape domains using `createDomainStore`, this means `createDomainStore` should support a `emitCachedOnSubscribe` config flag (default: false). pageNotes and noteFolders set it to true; ideas leaves it false.
 
 ### 4. Domain-agnostic mutation queue with registered executors
 
