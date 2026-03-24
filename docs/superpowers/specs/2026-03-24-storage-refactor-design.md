@@ -27,13 +27,13 @@ A `createStorage(deps)` factory receives all infrastructure dependencies and ret
 ```js
 // src/lib/storage/create-storage.js
 export function createStorage(deps) {
-  // deps: { firestore, auth, localStorage, isOffline, perfMonitor }
+  // deps: { firestore, auth, localStorage, isOffline, perfMonitor, emitEvent }
   const mutationQueue = createMutationQueue(deps);
 
   const ideas       = createIdeasStore(deps, mutationQueue);
   const categories  = createCategoriesStore(deps);
   const pageNotes   = createPageNotesStore(deps, mutationQueue);
-  const noteFolders = createNoteFoldersStore(deps, mutationQueue);
+  const noteFolders = createNoteFoldersStore(deps, mutationQueue, pageNotes);
   const canvas      = createCanvasStore(deps);
   const threadNotes = createThreadNotesStore(deps);
 
@@ -78,6 +78,7 @@ export const storage = createStorage({
   localStorage: window.localStorage,
   isOffline: () => navigator.onLine === false,
   perfMonitor,
+  emitEvent: (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail })),
 });
 ```
 
@@ -92,6 +93,7 @@ const storage = createStorage({
   localStorage: new FakeLocalStorage(),
   isOffline: () => false,
   perfMonitor: { trackWrite: () => {}, trackCacheHit: () => {}, trackCacheMiss: () => {} },
+  emitEvent: () => {},
 });
 ```
 
@@ -115,6 +117,13 @@ export const setIdeaArchived = (id, archived) => storage.ideas.setArchived(id, a
 
 **Migration path**: Update the old `src/lib/storage.js` to re-export from `compat.js`, then migrate each of the 8 consumer files one at a time. Delete `compat.js` once all consumers use the new API.
 
+**Legacy aliases**: The compat shim must also map these aliases that exist in the current API:
+- `addComment` → `threadNotes.add`
+- `subscribeToComments` → `threadNotes.subscribe`
+- `getNotesFromLocal` → `threadNotes.getCached`
+
+**Note folder cascade**: When `noteFolders.delete(folderId)` is called, all page notes in that folder must be moved to `folderId: null` (root). The note-folders store receives the pageNotes store as a dependency to perform this cascade.
+
 ### 2. Factories throughout (no classes)
 
 All constructs use closure-based factory functions, not classes. This keeps the style consistent across `createStorage`, `createMutationQueue`, `createDomainStore`, and all domain stores. Avoids `this`-binding issues when passing methods as callbacks.
@@ -125,7 +134,8 @@ The 6 domains fall into three distinct shapes. The shared `createDomainStore()` 
 
 | Shape | Domains | Pattern |
 |-------|---------|---------|
-| **Collection** (user-scoped query) | ideas, pageNotes, noteFolders, categories | `query(where userId) → onSnapshot → normalize → cache` |
+| **Collection** (user-scoped query) | ideas, pageNotes, noteFolders | `query(where userId) → onSnapshot → normalize → cache` |
+| **Settings map** (doc-per-key) | categories | Per-category docs in `categorySettings`, palette map, cross-domain rename |
 | **Single doc** (debounced) | canvas | `doc(collection, userId) → onSnapshot`, debounced `setDoc` |
 | **Subcollection** (parent-scoped) | threadNotes | `collection(ideas/${ideaId}/comments)` — per-parent listener |
 
@@ -158,10 +168,48 @@ Returns the standard interface:
 }
 ```
 
+#### Categories store (bespoke — "settings map" shape)
+
+Categories does NOT follow the standard `createDomainStore` pattern. It manages a palette of per-category settings docs (color, visibility) in the `categorySettings` collection, where each doc is keyed by category name under a user-scoped parent doc. It also has cross-domain behavior:
+
+- `renameCategory(from, to)` must update all matching ideas via `writeBatch` (500-op chunks) AND migrate the category setting doc. It receives a `getIdeas` callback from the ideas store to read current ideas data without circular dependency.
+- `cleanupUnusedCategories(deletedCategories)` is called by the ideas store after idea deletion when a category becomes orphaned. It removes the setting doc and fires a `categoryDeleted` CustomEvent.
+- Circuit breaker: a `firestoreAllowed` flag permanently disables Firestore calls after a `permission-denied` error, falling back to cache-only mode. This must be preserved.
+
+```js
+categories.getPalette(): Promise<Record<string, { color, visible }>>
+categories.setColor(name, hex): Promise
+categories.setVisibility(name, visible): Promise
+categories.rename(from, to): Promise<{ updatedIdeas: number }>
+categories.subscribe(cb): () => void
+categories.cleanupUnused(deletedCategories): Promise
+```
+
+**Cross-store wiring in `createStorage`**:
+```js
+// After creating both stores, wire the cross-domain callbacks
+ideas._onCategoriesOrphaned = (cats) => categories.cleanupUnused(cats);
+categories._getIdeas = () => ideas.getCached();
+```
+
+#### Client-side category helpers
+
+`trackCategoryUsage(category)` and `getCategoriesByRecentUsage(categories)` are pure localStorage helpers (no Firestore). They belong in the categories store for API cohesion:
+
+```js
+categories.trackUsage(category): void
+categories.getByRecentUsage(categories): string[]
+```
+
+#### `getCategories()` — derived from ideas
+
+The current `getCategories()` extracts unique category names from the ideas cache. In the new design, this becomes `ideas.getUniqueCategories()` since it derives from ideas data.
+
 #### Shared utilities (used by all shapes)
 
-- `createLocalCache(key, ttl, localStorage)` — read/write/TTL check/optimistic update for localStorage + in-memory cache
-- `withAuthGate(deps.auth, fn)` — wraps a function to no-op if no user is authenticated
+- `createLocalCache(key, ttl, localStorage)` — read/write/TTL check/optimistic update for localStorage + in-memory cache. Supports an optional `writeDebounce` (ms) parameter — the current ideas cache write is debounced at 150ms.
+- `withAuthGate(deps.auth, fn)` — wraps a function to no-op if no user is authenticated. Note: `deps.auth.getCurrentUserId` is async (returns `Promise<string|null>`).
+- `generateLocalId(prefix)` — shared ID generator using `crypto.randomUUID` with fallback.
 
 #### Canvas store (bespoke)
 
@@ -178,7 +226,7 @@ canvas.subscribe(cb): () => void
 Subcollection pattern scoped to a parent idea. Each `subscribe(ideaId, cb)` creates a separate listener on `ideas/${ideaId}/comments`. Uses `createLocalCache` keyed per ideaId.
 
 ```js
-threadNotes.subscribe(ideaId, cb): () => void
+threadNotes.subscribe(ideaId, cb, onError?): () => void  // onError param preserved from current API
 threadNotes.add(ideaId, text): Promise
 threadNotes.delete(ideaId, noteId): Promise
 threadNotes.update(ideaId, noteId, text): Promise
@@ -186,17 +234,23 @@ threadNotes.getCount(ideaId): number
 threadNotes.getCached(ideaId): Note[]
 ```
 
+ThreadNotes does NOT use the mutation queue. It performs direct Firestore calls with manual optimistic update and revert-on-failure (matching current behavior).
+
+**Subscribe behavior**: Thread notes and page notes emit cached data immediately before setting up the Firestore listener (fire cached first, then live updates). The `createDomainStore` base for collection-type stores does NOT do this — ideas uses snapshot-only. This difference must be preserved in each domain's implementation.
+
 ### 4. Domain-agnostic mutation queue with registered executors
 
 The mutation queue is pure infrastructure. It stores `{ type, payload }` entries in localStorage and calls registered executor functions on flush. Each domain store registers its own executors during creation.
 
 ```js
 function createMutationQueue(deps) {
+  // deps includes: { localStorage, isOffline, auth, emitEvent }
+  // emitEvent is a function for dispatching CustomEvents (e.g., mutation queue count changes)
   const executors = {};
 
   return {
     register(type, executor) { executors[type] = executor; },
-    enqueue(entry) { /* persist to localStorage, emit count event */ },
+    enqueue(entry) { /* persist to localStorage, emit count via deps.emitEvent */ },
     flush(opts) { /* iterate queue, call executors[entry.type](entry.payload) */ },
     getPendingCount() { /* read from localStorage */ },
     run({ type, payload, userId, applyLocal }) {
@@ -206,6 +260,8 @@ function createMutationQueue(deps) {
   };
 }
 ```
+
+**Event emission**: The mutation queue emits count-change events via `deps.emitEvent(name, detail)`. In production wiring, this is wired to `window.dispatchEvent(new CustomEvent(...))`. In tests, it can be a no-op or a spy. The categories store also uses `deps.emitEvent` for the `categoryDeleted` event.
 
 Domain stores register executors at creation time:
 
@@ -230,7 +286,14 @@ function createIdeasStore(deps, mutationQueue) {
 
 ### 5. Firestore persistence in production wiring
 
-Persistence setup (`enableMultiTabIndexedDbPersistence`) runs in the production wiring file (`src/lib/storage/index.js`) before `createStorage()` is called. The factory never touches persistence — keeps it pure and testable.
+Persistence setup runs in the production wiring file (`src/lib/storage/index.js`) before `createStorage()` is called. The factory never touches persistence — keeps it pure and testable.
+
+The full fallback chain must be preserved from the current code:
+1. Try `enableMultiTabIndexedDbPersistence(db)`
+2. On `failed-precondition` → fall back to `enableIndexedDbPersistence(db)`
+3. On `unimplemented` → warn (browser doesn't support it)
+
+The production wiring file also owns the `window.addEventListener('online', ...)` listener and the initial 1-second flush timer that currently exist as import-time side effects in `storage.js`.
 
 ---
 
@@ -244,6 +307,7 @@ src/lib/storage/
   local-cache.js        # createLocalCache() — localStorage + in-memory + TTL
   domain-store.js       # createDomainStore() — shared collection-based pattern
   auth-gate.js          # withAuthGate() utility
+  utils.js              # generateLocalId(), shared helpers
   domains/
     ideas.js            # createIdeasStore() + normalize + extensions
     categories.js       # createCategoriesStore() — palette, rename, visibility
@@ -260,7 +324,7 @@ src/lib/storage/
 
 ### Test environment
 
-- `FakeFirestore`: in-memory Map-backed, supports `setDoc`/`updateDoc`/`deleteDoc`/`onSnapshot`/`query`/`where`
+- `FakeFirestore`: in-memory Map-backed, supports `setDoc`/`updateDoc`/`deleteDoc`/`onSnapshot`/`query`/`where`/`orderBy`/`limit`/`writeBatch`/`addDoc`/`getDoc`/`deleteField`/`Timestamp.fromMillis`
 - `FakeLocalStorage`: Map-backed `Storage` interface
 
 ### Boundary tests to write
@@ -290,4 +354,14 @@ src/lib/storage/
 | `src/js/thread-notes.js` | threadNotes (subscribe, add, delete, update, count, cached) |
 | `src/js/category-dropdown.js` | setIdeaCategories |
 
-Migration order: one file at a time, from simplest (fewest imports) to most complex. After each migration, the compat shim covers the remaining callers.
+**Migration order** (simplest to most complex):
+1. `src/js/category-dropdown.js` — 1 import (`setIdeaCategories`)
+2. `src/js/thread-notes.js` — 6 imports (threadNotes only)
+3. `src/js/canvas-cards.js` — 6 imports (ideas CRUD)
+4. `src/js/canvas.js` — canvas load/save/subscribe
+5. `src/js/notes.js` — pageNotes + noteFolders
+6. `src/js/categories.js` — category palette, rename, visibility
+7. `src/js/review.js` — ideas + categories
+8. `src/js/index.js` — ideas + categories (most imports)
+
+After each migration, the compat shim covers the remaining callers.
