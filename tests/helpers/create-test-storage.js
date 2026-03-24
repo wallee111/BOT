@@ -20,3 +20,5 @@ export function createTestDeps(overrides = {}) {
     ...overrides,
   };
 }
+
+export { createStorage } from '../../src/lib/storage/create-storage.js';
