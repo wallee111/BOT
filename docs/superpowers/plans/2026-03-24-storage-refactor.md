@@ -230,6 +230,13 @@ export class FakeFirestore {
 
   _notifyListeners() {
     for (const listener of this._listeners) {
+      if (listener.type === 'doc') {
+        // Doc listener — fire with current doc state
+        const data = this._data.get(listener.docPath);
+        listener.callback(new FakeDocSnapshot(listener.docPath.split('/').pop(), data));
+        continue;
+      }
+      // Query listener
       const docs = this._getAll(listener.collectionPath)
         .filter(doc => {
           if (!listener.filters) return true;
@@ -774,7 +781,31 @@ export function withAuthGate(auth, fn) {
 }
 ```
 
-- [ ] **Step 9: Run all tests**
+- [ ] **Step 9: Write auth-gate test**
+
+Add to `tests/storage/utils.test.js` (or a new `tests/storage/auth-gate.test.js`):
+
+```js
+import { describe, it, expect } from 'vitest';
+import { withAuthGate } from '../../src/lib/storage/auth-gate.js';
+
+describe('withAuthGate', () => {
+  it('calls fn with userId when authenticated', async () => {
+    const auth = { getCurrentUserId: async () => 'user-1' };
+    const fn = withAuthGate(auth, (userId, x) => `${userId}:${x}`);
+    const result = await fn('hello');
+    expect(result).toBe('user-1:hello');
+  });
+
+  it('throws when not authenticated', async () => {
+    const auth = { getCurrentUserId: async () => null };
+    const fn = withAuthGate(auth, () => {});
+    await expect(fn()).rejects.toThrow('User must be authenticated');
+  });
+});
+```
+
+- [ ] **Step 10: Run all tests**
 
 ```bash
 npm test
@@ -782,7 +813,7 @@ npm test
 
 Expected: All tests pass.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add src/lib/storage/utils.js src/lib/storage/auth-gate.js src/lib/storage/local-cache.js tests/storage/utils.test.js tests/storage/local-cache.test.js
@@ -1552,10 +1583,18 @@ Create `src/lib/storage/domains/ideas.js`. Port `normalizeIdeaObject` from `stor
 Key implementation notes from the current code:
 - `normalizeIdeaObject` (storage.js:446-475) — handles Firestore Timestamp → millis, deduplicates categories
 - Import `normalizeCategories` from `../../utils.js` (the app's shared utils, not the storage utils)
-- `save` (storage.js:1023-1059) — uses `runMutation` with optimistic local update
-- `delete` (storage.js:1201-1232) — after mutation, calls `cleanupUnusedCategories` → wire via `onCategoriesOrphaned`
 - Ideas cache write debounce: 150ms
 - Sort order: `(a, b) => a.createdAt - b.createdAt`
+
+**CRITICAL — mutation queue routing**: The ideas store must **override** the base `save`, `delete`, and `update` methods from `createDomainStore`. Do NOT delegate to `store.save()` — instead route through `mutationQueue.run()` with optimistic local updates via `store.updateCache()`. This matches the current code where all write operations go through `runMutation()` (storage.js:1023-1304).
+
+- `save` (storage.js:1023-1059) — register `saveIdea` executor, call `mutationQueue.run()`, return `true`
+- `delete` (storage.js:1201-1232) — register `deleteIdea` executor, call `mutationQueue.run()`, then `onCategoriesOrphaned?.()`, return `true`
+- `setArchived/setHidden/setPinned/setCategories/updateText/updatePriority` — each registers its own executor and routes through `mutationQueue.run()`
+
+**Return values**: All mutation methods (`save`, `setArchived`, `setHidden`, `setPinned`, `setCategories`, `updateText`, `updatePriority`, `delete`) must return `true` to match the current API. Do not return the item object.
+
+**`getUniqueCategories`**: This must be an **async** method that calls `await this.getAll()` first (to ensure ideas are loaded), then extracts unique categories from the result. The current `getCategories()` does `await getIdeas()` internally. A cold-start call with no cache would return empty results if this is sync-only.
 
 - [ ] **Step 4: Run ideas tests**
 
@@ -1824,6 +1863,8 @@ Key references from storage.js:
 - `deletePageNote` (storage.js:1747-1765) — via mutation queue
 - `subscribeToPageNotes` (storage.js:1670-1711) — cached-first, then onSnapshot
 
+**CRITICAL — mutation queue routing**: Like ideas, page-notes must override `save` and `delete` to route through `mutationQueue.run()` with optimistic updates. Do not use the base `store.save()`/`store.delete()`. Register `savePageNote` and `deletePageNote` executors. `save` returns the payload object (matching current behavior). `delete` returns `true`.
+
 - [ ] **Step 5: Implement note-folders.js**
 
 Create `src/lib/storage/domains/note-folders.js`. Uses `createDomainStore` with `emitCachedOnSubscribe: true`. Sort: `(a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)`. Overrides `delete` to cascade: moves notes in deleted folder to `folderId: null` via `pageNotesStore.save()` before deleting folder.
@@ -1832,6 +1873,8 @@ Key references:
 - `saveNoteFolder` (storage.js:1810-1841) — defaults name, sortOrder
 - `deleteNoteFolder` (storage.js:1843-1867) — cascade to pageNotes
 - `subscribeToNoteFolders` (storage.js:1767-1808) — cached-first
+
+**CRITICAL — mutation queue routing**: Same as page-notes — override `save` and `delete` to route through `mutationQueue.run()`. Register `saveNoteFolder` and `deleteNoteFolder` executors. `delete` must cascade (move notes to root) before deleting the folder.
 
 - [ ] **Step 6: Run tests**
 
@@ -2337,7 +2380,7 @@ Key mappings:
 - `deleteIdea` → `storage.ideas.delete`
 - `updateIdeaText` → `storage.ideas.updateText`
 - `updateIdeaPriority` → `storage.ideas.updatePriority`
-- `getCategories` → `storage.ideas.getUniqueCategories`
+- `getCategories` → `async (opts) => storage.ideas.getUniqueCategories(opts)` (async — calls `getAll()` internally)
 - `getCategoryPalette` → `storage.categories.getPalette`
 - `setCategoryColor` → `storage.categories.setColor`
 - `setCategoryVisibility` → `storage.categories.setVisibility`
