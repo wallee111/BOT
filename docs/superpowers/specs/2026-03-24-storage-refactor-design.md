@@ -385,3 +385,4 @@ src/lib/storage/
 8. `src/js/index.js` — ideas + categories (most imports)
 
 After each migration, the compat shim covers the remaining callers.
+ 
