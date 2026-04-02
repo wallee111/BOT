@@ -1,7 +1,10 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
 import { storage } from '../lib/storage/index.js';
-const { ideas, categories } = storage;
+import { isDemo } from '../lib/demo/demo-mode.js';
+import { getDemoStorage } from '../lib/demo/demo-storage.js';
+const activeStorage = isDemo() ? getDemoStorage() : storage;
+const { ideas, categories } = activeStorage;
 import {
     escapeHtml,
     getCategoryAppearance,
@@ -69,8 +72,8 @@ async function initialize() {
 
     // 1. Render cached data IMMEDIATELY (before auth) for instant first paint
     //    Only show cache if Firebase has a current user (prevents cross-user data leak)
-    const cachedIdeas = auth.currentUser ? JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]') : [];
-    const cachedPalette = auth.currentUser ? JSON.parse(localStorage.getItem('category_settings_v1') || '{}') : {};
+    const cachedIdeas = (isDemo() || auth.currentUser) ? JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]') : [];
+    const cachedPalette = (isDemo() || auth.currentUser) ? JSON.parse(localStorage.getItem('category_settings_v1') || '{}') : {};
     if (cachedIdeas.length) {
         state.categoryPalette = cachedPalette;
         state.allIdeas = cachedIdeas;
@@ -86,10 +89,23 @@ async function initialize() {
     }
 
     // 2. Auth check (runs while cached UI is already visible)
-    try {
-        const user = await ensureAuthSession({ requireAuth: true });
-        if (!user) {
-            console.log('[index] No user found, redirecting to signin.html');
+    if (!isDemo()) {
+        try {
+            const user = await ensureAuthSession({ requireAuth: true });
+            if (!user) {
+                console.log('[index] No user found, redirecting to signin.html');
+                try {
+                    localStorage.removeItem('ideas_v1_cache');
+                    localStorage.removeItem('category_settings_v1');
+                    localStorage.removeItem('category_usage_v1');
+                    localStorage.removeItem('canvas_layouts');
+                } catch (e) { /* ignore */ }
+                window.location.href = 'signin.html';
+                return;
+            }
+            console.log('[index] User authenticated:', user.email);
+        } catch (error) {
+            console.error('[index] Auth required but failed:', error);
             try {
                 localStorage.removeItem('ideas_v1_cache');
                 localStorage.removeItem('category_settings_v1');
@@ -99,17 +115,11 @@ async function initialize() {
             window.location.href = 'signin.html';
             return;
         }
-        console.log('[index] User authenticated:', user.email);
-    } catch (error) {
-        console.error('[index] Auth required but failed:', error);
-        try {
-            localStorage.removeItem('ideas_v1_cache');
-            localStorage.removeItem('category_settings_v1');
-            localStorage.removeItem('category_usage_v1');
-            localStorage.removeItem('canvas_layouts');
-        } catch (e) { /* ignore */ }
-        window.location.href = 'signin.html';
-        return;
+    }
+
+    if (isDemo()) {
+        const { injectDemoBanner } = await import('../lib/demo/demo-mode.js');
+        injectDemoBanner();
     }
 
     initThreadNotes();
