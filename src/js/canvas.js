@@ -2,7 +2,10 @@ import "../styles/main.css";
 import "../styles/style.v1.css";
 import "../styles/canvas.css";
 import { storage } from '../lib/storage/index.js';
-const { ideas, categories, canvas } = storage;
+import { isDemo } from '../lib/demo/demo-mode.js';
+import { getDemoStorage } from '../lib/demo/demo-storage.js';
+const activeStorage = isDemo() ? getDemoStorage() : storage;
+const { ideas, categories, canvas } = activeStorage;
 import { getCategoryAppearance, escapeHtml } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
@@ -67,22 +70,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 2. Render cached data INSTANTLY (before auth resolves)
-    const cachedLayout = JSON.parse(localStorage.getItem('canvas_layout_v1') || 'null');
-    const cachedIdeas = JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]');
-    const cachedPalette = JSON.parse(localStorage.getItem('category_settings_v1') || '{}');
+    if (!isDemo()) {
+        const cachedLayout = JSON.parse(localStorage.getItem('canvas_layout_v1') || 'null');
+        const cachedIdeas = JSON.parse(localStorage.getItem('ideas_v1_cache') || '[]');
+        const cachedPalette = JSON.parse(localStorage.getItem('category_settings_v1') || '{}');
 
-    if (cachedLayout) {
-        layout = {
-            cards: Array.isArray(cachedLayout.cards) ? cachedLayout.cards : [],
-            headers: Array.isArray(cachedLayout.headers) ? cachedLayout.headers : [],
-            viewport: cachedLayout.viewport || { panX: 0, panY: 0, zoom: 1.0 },
-        };
-        allIdeas = cachedIdeas;
-        categoryPalette = cachedPalette;
+        if (cachedLayout) {
+            layout = {
+                cards: Array.isArray(cachedLayout.cards) ? cachedLayout.cards : [],
+                headers: Array.isArray(cachedLayout.headers) ? cachedLayout.headers : [],
+                viewport: cachedLayout.viewport || { panX: 0, panY: 0, zoom: 1.0 },
+            };
+            allIdeas = cachedIdeas;
+            categoryPalette = cachedPalette;
 
-        engine.setState(layout.viewport);
-        zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
-        zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(layout.viewport.zoom * 100)}%`);
+            engine.setState(layout.viewport);
+            zoomLevelDisplay.textContent = `${Math.round(layout.viewport.zoom * 100)}%`;
+            zoomLevelDisplay.setAttribute('aria-label', `Zoom level: ${Math.round(layout.viewport.zoom * 100)}%`);
+        }
     }
 
     // 3. Init managers (needed for both cached and fresh render)
@@ -159,16 +164,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     overlayDragCtrl = createOverlayDragController(addOverlay, viewportEl);
 
     // 6. Auth check (UI is already showing cached data)
-    try {
-        const user = await ensureAuthSession({ requireAuth: true });
-        if (!user) {
+    if (!isDemo()) {
+        try {
+            const user = await ensureAuthSession({ requireAuth: true });
+            if (!user) {
+                window.location.href = 'signin.html';
+                return;
+            }
+        } catch (error) {
+            console.error('[canvas] Auth required but failed:', error);
             window.location.href = 'signin.html';
             return;
         }
-    } catch (error) {
-        console.error('[canvas] Auth required but failed:', error);
-        window.location.href = 'signin.html';
-        return;
+    }
+
+    if (isDemo()) {
+        const { injectDemoBanner } = await import('../lib/demo/demo-mode.js');
+        injectDemoBanner();
     }
 
     // 7. Load fresh data from Firestore (reconcile with cache)
