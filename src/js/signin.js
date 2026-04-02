@@ -3,6 +3,7 @@ import "../styles/main.css";
 import "../styles/style.v1.css";
 import { signInWithGoogle, getCurrentUser } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
+import { startDemo } from '../lib/demo/demo-mode.js';
 
 const signInButton = document.getElementById('googleSignInBtn');
 const statusMessage = document.getElementById('statusMessage');
@@ -93,6 +94,11 @@ getCurrentUser().then((user) => {
 }).catch((error) => {
   console.error('[signin] Background auth check error:', error);
 });
+
+const tryDemoBtn = document.getElementById('tryDemoBtn');
+if (tryDemoBtn) {
+  tryDemoBtn.addEventListener('click', () => startDemo());
+}
 
 if (signInButton) {
   signInButton.addEventListener('click', async () => {
