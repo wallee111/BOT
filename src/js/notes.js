@@ -5,7 +5,10 @@ import "../styles/notes.css";
 
 // ── Module imports ─────────────────────────────────────────────
 import { storage } from '../lib/storage/index.js';
-const { pageNotes, noteFolders } = storage;
+import { isDemo } from '../lib/demo/demo-mode.js';
+import { getDemoStorage } from '../lib/demo/demo-storage.js';
+const activeStorage = isDemo() ? getDemoStorage() : storage;
+const { pageNotes, noteFolders } = activeStorage;
 import { ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
 import { showConfirmDialog } from '../lib/confirm-dialog.js';
@@ -914,10 +917,17 @@ function wireEvents() {
 
 async function init() {
     // Auth guard
-    const user = await ensureAuthSession({ requireAuth: true });
-    if (!user) {
-        window.location.href = '/signin.html';
-        return;
+    if (!isDemo()) {
+        const user = await ensureAuthSession({ requireAuth: true });
+        if (!user) {
+            window.location.href = '/signin.html';
+            return;
+        }
+    }
+
+    if (isDemo()) {
+        const { injectDemoBanner } = await import('../lib/demo/demo-mode.js');
+        injectDemoBanner();
     }
 
     // Start with folders view on mobile
