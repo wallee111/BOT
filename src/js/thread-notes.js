@@ -5,7 +5,10 @@
  */
 
 import { storage } from '../lib/storage/index.js';
-const { threadNotes } = storage;
+import { isDemo } from '../lib/demo/demo-mode.js';
+import { getDemoStorage } from '../lib/demo/demo-storage.js';
+const activeStorage = isDemo() ? getDemoStorage() : storage;
+const { threadNotes } = activeStorage;
 import { escapeHtml, formatTime } from '../lib/utils.js';
 import { showToast } from '../lib/toast.js';
 import { initSwipeGestures, cleanupSwipeGestures } from './idea-bubble.js';
