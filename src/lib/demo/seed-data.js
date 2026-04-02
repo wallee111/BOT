@@ -193,16 +193,13 @@ export const SEED_CATEGORY_PALETTE = {
 // ── Canvas Layout ──────────────────────────────────────────────
 
 export const SEED_CANVAS_LAYOUT = {
-  cards: {
-    'demo-idea-1':  { x: 80,  y: 80  },
-    'demo-idea-2':  { x: 400, y: 80  },
-    'demo-idea-4':  { x: 80,  y: 280 },
-    'demo-idea-7':  { x: 400, y: 280 },
-    'demo-idea-8':  { x: 720, y: 80  },
-    'demo-idea-10': { x: 720, y: 280 },
-    'demo-idea-11': { x: 80,  y: 480 },
-    'demo-idea-13': { x: 400, y: 480 },
-  },
+  cards: [
+    { categoryName: 'Projects', x: 80,  y: 80  },
+    { categoryName: 'Creative', x: 400, y: 80  },
+    { categoryName: 'Learning', x: 720, y: 80  },
+    { categoryName: 'Life',     x: 80,  y: 380 },
+    { categoryName: 'Random',   x: 400, y: 380 },
+  ],
   headers: [],
   viewport: { panX: 0, panY: 0, zoom: 1 },
 };
