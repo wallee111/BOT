@@ -1,7 +1,10 @@
 import "../styles/main.css";
 import "../styles/style.v1.css";
 import { storage } from '../lib/storage/index.js';
-const { ideas, categories } = storage;
+import { isDemo } from '../lib/demo/demo-mode.js';
+import { getDemoStorage } from '../lib/demo/demo-storage.js';
+const activeStorage = isDemo() ? getDemoStorage() : storage;
+const { ideas, categories } = activeStorage;
 import { getCategoryAppearance, normalizeCategories, HEX_COLOR_PATTERN, escapeHtml, formatTime, formatTextContent } from '../lib/utils.js';
 import { getCurrentUserId, ensureAuthSession } from '../lib/auth.js';
 import { initThreadNotes, attachThread, toggleThread, cleanupThreadNotes, closeDetailPane, openInDetailPane } from './thread-notes.js';
@@ -893,16 +896,23 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const user = await ensureAuthSession({ requireAuth: true });
-        if (!user) {
+    if (!isDemo()) {
+        try {
+            const user = await ensureAuthSession({ requireAuth: true });
+            if (!user) {
+                window.location.href = 'signin.html';
+                return;
+            }
+        } catch (error) {
+            console.error('[review] Auth required but failed:', error);
             window.location.href = 'signin.html';
             return;
         }
-    } catch (error) {
-        console.error('[review] Auth required but failed:', error);
-        window.location.href = 'signin.html';
-        return;
+    }
+
+    if (isDemo()) {
+        const { injectDemoBanner } = await import('../lib/demo/demo-mode.js');
+        injectDemoBanner();
     }
 
     // Initialize thread notes module
