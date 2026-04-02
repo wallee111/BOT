@@ -229,6 +229,11 @@
             </div>
         </div>
     </div>
+    <script type="module">
+        if (sessionStorage.getItem('bot_demo_mode') === 'true') {
+            window.location.replace('/index.html');
+        }
+    </script>
     <script type="module" src="/src/js/categories.js"></script>
 
 </body>
