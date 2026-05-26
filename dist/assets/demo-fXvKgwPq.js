@@ -1,0 +1,1 @@
+import"./modulepreload-polyfill-B5Qt9EMX.js";import{s as t}from"./canvas-Bek06I0H.js";import"./vendor-firebase-DmE5nZon.js";import"./vendor-BXWtuYvb.js";document.getElementById("startDemoBtn").addEventListener("click",()=>{t()});

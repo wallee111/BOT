@@ -8,13 +8,13 @@
     <meta name="theme-color" content="#ffca28">
     <link rel="manifest" href="/manifest.json">
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/signin-DavJGoC4.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/style.v1-DzwfTUSC.js">
+  <script type="module" crossorigin src="/assets/signin-BRJZi-Q1.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
   <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-CLAaIahH.js">
-  <link rel="modulepreload" crossorigin href="/assets/canvas-Do9DTF4m.js">
-  <link rel="stylesheet" crossorigin href="/assets/style-CQfIbyvW.css">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DmE5nZon.js">
+  <link rel="modulepreload" crossorigin href="/assets/canvas-Bek06I0H.js">
   <link rel="stylesheet" crossorigin href="/assets/signin-pAQcHX1q.css">
+  <link rel="stylesheet" crossorigin href="/assets/style-CHoMZc8u.css">
 </head>
 
 <body>
@@ -26,6 +26,20 @@
 
             <button type="button" class="btn-primary google-btn" id="googleSignInBtn">
                 Continue with Google
+            </button>
+
+            <div style="display:flex;align-items:center;gap:12px;margin:16px 0;">
+                <hr style="flex:1;border:none;border-top:1px solid #333;">
+                <span style="color:#a0a0b8;font-size:13px;">or</span>
+                <hr style="flex:1;border:none;border-top:1px solid #333;">
+            </div>
+            <button id="tryDemoBtn" class="signin-demo-btn" style="
+                display:inline-flex;align-items:center;justify-content:center;gap:8px;
+                padding:12px 24px;background:transparent;color:#ffca28;
+                font-size:14px;font-weight:600;border:1px solid #ffca28;
+                border-radius:12px;cursor:pointer;width:100%;
+                transition:background 0.15s;">
+                Try Demo
             </button>
 
             <div id="statusMessage" class="status-message" hidden></div>
