@@ -91,16 +91,19 @@
             </header>
             <!-- Dashboard -->
             <section class="dashboard" id="dashboard">
-                <!-- Pinned Ideas Section -->
-                <section class="dash-section" id="pinnedSection">
-                    <div class="dash-section__header">
-                        <h2 class="dash-section__title">Pinned</h2>
-                        <span class="dash-section__count" id="pinnedCount"></span>
-                    </div>
-                    <div class="dash-section__body" id="pinnedFeed" aria-live="polite">
-                        <!-- Pinned ideas rendered here -->
-                    </div>
-                </section>
+                <!-- To-do + Pinned shared row (side-by-side on desktop, stacked on mobile) -->
+                <div class="dash-row dash-row--todo-pinned">
+                    <section class="dash-row__col dash-row__col--todo" id="todoListSection" aria-label="To-do list"></section>
+                    <section class="dash-section dash-row__col dash-row__col--pinned" id="pinnedSection">
+                        <div class="dash-section__header">
+                            <h2 class="dash-section__title">Pinned</h2>
+                            <span class="dash-section__count" id="pinnedCount"></span>
+                        </div>
+                        <div class="dash-section__body" id="pinnedFeed" aria-live="polite">
+                            <!-- Pinned ideas rendered here -->
+                        </div>
+                    </section>
+                </div>
 
                 <!-- Resurface Section -->
                 <section class="dash-section" id="resurfaceSection" hidden>

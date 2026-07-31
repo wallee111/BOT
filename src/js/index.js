@@ -4,7 +4,7 @@ import { storage } from '../lib/storage/index.js';
 import { isDemo } from '../lib/demo/demo-mode.js';
 import { getDemoStorage } from '../lib/demo/demo-storage.js';
 const activeStorage = isDemo() ? getDemoStorage() : storage;
-const { ideas, categories } = activeStorage;
+const { ideas, categories, todos } = activeStorage;
 import {
     escapeHtml,
     getCategoryAppearance,
@@ -19,6 +19,7 @@ import { showToast } from '../lib/toast.js';
 import { createCategoryDropdownController } from './category-dropdown.js';
 import { initSwipeGestures } from './idea-bubble.js';
 import { showConfirmDialog } from '../lib/confirm-dialog.js';
+import { initTodos } from './todos.js';
 
 // --- Constants ---
 const CATEGORY_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -124,6 +125,10 @@ async function initialize() {
 
     initThreadNotes();
 
+    // Init To-do list (Morning / Afternoon / Evening)
+    const todoContainer = document.getElementById('todoListSection');
+    const unsubTodos = todos ? initTodos(todos, todoContainer) : () => {};
+
     // 3. Refresh palette in background (don't block on it)
     refreshCategoryPalette().catch(console.error);
 
@@ -144,6 +149,7 @@ async function initialize() {
     window.addEventListener('beforeunload', () => {
         unsubscribe();
         unsubCategorySettings();
+        unsubTodos();
         cleanupThreadNotes();
     });
 }
@@ -225,14 +231,14 @@ async function handleIdeaSave(e) {
     if (!text) return;
 
     const cat = categoryNew?.value?.trim() || categorySelect?.value?.trim() || '';
-    const categories = cat ? [cat] : [];
+    const ideaCategories = cat ? [cat] : [];
     const priority = prioritySelect?.value || '';
     const tags = extractTags(text);
     const idea = {
         id: (window.crypto?.randomUUID?.()) || `idea-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         text,
-        category: categories[0] || '',
-        categories,
+        category: ideaCategories[0] || '',
+        categories: ideaCategories,
         tags,
         priority,
         createdAt: Date.now()
@@ -885,9 +891,9 @@ async function refreshCategoryPalette(options = {}) {
 }
 
 async function updateCategoryList() {
-    const categories = await ideas.getUniqueCategories();
+    const uniqueCategories = await ideas.getUniqueCategories();
     const paletteCategories = Object.keys(state.categoryPalette || {});
-    const combined = Array.from(new Set([...categories, ...paletteCategories])).filter(Boolean);
+    const combined = Array.from(new Set([...uniqueCategories, ...paletteCategories])).filter(Boolean);
     state.availableCategories = combined.slice();
 
     const sorted = categories.getByRecentUsage(combined);

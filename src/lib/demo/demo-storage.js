@@ -301,6 +301,22 @@ export function getDemoStorage() {
   });
   const canvas = createDemoCanvas();
   const threadNotes = createDemoThreadNotes();
+  const todosBase = createMemoryStore([], {
+    sortFn: (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+  });
+  const todos = {
+    subscribe: todosBase.subscribe,
+    getCached: todosBase.getCached,
+    getAll: todosBase.getAll,
+    add: ({ slot, text = '' }) => {
+      const id = 'demo-todo-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      const now = Date.now();
+      return todosBase.save({ id, slot, text, completed: false, sortOrder: now, createdAt: now }).then(() => id);
+    },
+    updateText: (id, text) => todosBase.update(id, { text }),
+    setCompleted: (id, completed) => todosBase.update(id, { completed }),
+    delete: (id) => todosBase.delete(id),
+  };
 
   ideas.onCategoriesOrphaned = (cats) => categories.cleanupUnused(cats);
   categories.getIdeasForRename = () => ideas.getCached();
@@ -312,6 +328,7 @@ export function getDemoStorage() {
     noteFolders,
     canvas,
     threadNotes,
+    todos,
     mutations: {
       getPendingCount: () => 0,
       flush: () => Promise.resolve(),

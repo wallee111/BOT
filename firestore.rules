@@ -126,6 +126,22 @@ service cloud.firestore {
         && (request.resource.data.folderId == null || request.resource.data.folderId is string);
     }
 
+    match /todos/{todoId} {
+      allow create: if createsOwnResource(request.resource)
+        && validStringLength(request.resource.data.text, 1000)
+        && request.resource.data.keys().hasAll(['userId', 'text', 'completed', 'slot', 'createdAt'])
+        && validTimestamp(request.resource.data.createdAt)
+        && isBoolean(request.resource.data.completed)
+        && request.resource.data.slot in ['morning', 'afternoon', 'evening'];
+      allow read: if ownsResource(resource);
+      allow delete: if ownsResource(resource);
+      allow update: if ownsResource(resource)
+        && request.resource.data.userId == resource.data.userId
+        && validStringLength(request.resource.data.text, 1000)
+        && isBoolean(request.resource.data.completed)
+        && request.resource.data.slot in ['morning', 'afternoon', 'evening'];
+    }
+
     match /noteFolders/{folderId} {
       allow create: if createsOwnResource(request.resource)
         && validStringLength(request.resource.data.name, 100)
