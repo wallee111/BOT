@@ -23,8 +23,6 @@ import { initTodos } from './todos.js';
 
 // --- Constants ---
 const CATEGORY_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' });
-const RESURFACE_MIN_AGE_DAYS = 7;
-const RESURFACE_SHOWN_KEY = 'resurface_shown_ids_v1';
 
 // --- DOM Elements ---
 const $ = sel => document.querySelector(sel);
@@ -33,9 +31,6 @@ const $ = sel => document.querySelector(sel);
 const pinnedSection = $('#pinnedSection');
 const pinnedFeed = $('#pinnedFeed');
 const pinnedCount = $('#pinnedCount');
-const resurfaceSection = $('#resurfaceSection');
-const resurfaceFeed = $('#resurfaceFeed');
-const resurfaceRefresh = $('#resurfaceRefresh');
 const hiddenSection = $('#hiddenSection');
 const hiddenFeed = $('#hiddenFeed');
 const hiddenCount = $('#hiddenCount');
@@ -63,7 +58,6 @@ let state = {
     availableCategories: [],
     categoryPalette: {},
     categoryUsage: {},
-    resurfaceIdea: null,
     hiddenExpanded: false,
 };
 
@@ -158,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initialize().catch(console.error);
     initCaptureFab();
     initHiddenToggle();
-    initResurfaceRefresh();
 });
 
 // --- Capture FAB + Overlay ---
@@ -419,61 +412,6 @@ function initHiddenToggle() {
     });
 }
 
-// --- Resurface ---
-
-function initResurfaceRefresh() {
-    resurfaceRefresh?.addEventListener('click', () => {
-        pickResurfaceIdea(true);
-        renderResurfaceSection();
-    });
-}
-
-function getResurfaceShownIds() {
-    try {
-        return JSON.parse(localStorage.getItem(RESURFACE_SHOWN_KEY) || '[]');
-    } catch { return []; }
-}
-
-function addResurfaceShownId(id) {
-    try {
-        const shown = getResurfaceShownIds();
-        shown.push(id);
-        // Keep last 50 to avoid stale data
-        localStorage.setItem(RESURFACE_SHOWN_KEY, JSON.stringify(shown.slice(-50)));
-    } catch { /* ignore */ }
-}
-
-function pickResurfaceIdea(forceNew = false) {
-    const now = Date.now();
-    const minAge = RESURFACE_MIN_AGE_DAYS * 24 * 60 * 60 * 1000;
-    const candidates = state.allIdeas.filter(i =>
-        !i.archived && !i.hidden && !i.pinned &&
-        (now - (Number(i.createdAt) || 0)) >= minAge
-    );
-
-    if (!candidates.length) {
-        state.resurfaceIdea = null;
-        return;
-    }
-
-    const shownIds = new Set(getResurfaceShownIds());
-    let pool = candidates.filter(i => !shownIds.has(i.id));
-
-    // If all have been shown, reset
-    if (!pool.length) {
-        try { localStorage.removeItem(RESURFACE_SHOWN_KEY); } catch { /* ignore */ }
-        pool = candidates;
-    }
-
-    // Pick a random one
-    const idx = Math.floor(Math.random() * pool.length);
-    state.resurfaceIdea = pool[idx];
-
-    if (state.resurfaceIdea && forceNew) {
-        addResurfaceShownId(state.resurfaceIdea.id);
-    }
-}
-
 // --- Dashboard Rendering ---
 
 function renderDashboard(ideas) {
@@ -488,10 +426,6 @@ function renderDashboard(ideas) {
     renderFirstRunEmpty(ideas);
 
     renderPinnedSection(pinnedIdeas);
-
-    // Pick resurface idea if we don't have one yet
-    if (!state.resurfaceIdea) pickResurfaceIdea();
-    renderResurfaceSection();
 
     renderHiddenSection(hiddenIdeas);
 }
@@ -533,54 +467,6 @@ function renderPinnedSection(pinnedIdeas) {
     }
 
     renderIdeaList(pinnedFeed, sorted, { hiddenView: false });
-}
-
-function renderResurfaceSection() {
-    if (!resurfaceFeed || !resurfaceSection) return;
-
-    if (!state.resurfaceIdea) {
-        resurfaceSection.hidden = true;
-        return;
-    }
-
-    resurfaceSection.hidden = false;
-    resurfaceFeed.innerHTML = '';
-
-    const idea = state.resurfaceIdea;
-    const daysAgo = Math.floor((Date.now() - (Number(idea.createdAt) || 0)) / (24 * 60 * 60 * 1000));
-    const timeLabel = daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
-
-    // Wrap idea-bubble in a resurface card container
-    const card = document.createElement('div');
-    card.className = 'resurface-card';
-
-    // Days-ago badge
-    const timeBadge = document.createElement('div');
-    timeBadge.className = 'resurface-card__time';
-    timeBadge.textContent = timeLabel;
-    card.appendChild(timeBadge);
-
-    // Build idea-bubble (same component as pinned/hidden sections)
-    const bubble = buildIdeaElement(idea, { hiddenView: false });
-    card.appendChild(bubble);
-
-    // Dismiss button at bottom of resurface card
-    const actionsBar = document.createElement('div');
-    actionsBar.className = 'resurface-card__actions';
-    actionsBar.innerHTML = `<button type="button" class="md3-button-text resurface-card__dismiss" data-id="${idea.id}">Dismiss</button>`;
-    card.appendChild(actionsBar);
-
-    // Dismiss handler
-    actionsBar.querySelector('.resurface-card__dismiss')?.addEventListener('click', () => {
-        addResurfaceShownId(idea.id);
-        pickResurfaceIdea(true);
-        renderResurfaceSection();
-    });
-
-    resurfaceFeed.appendChild(card);
-
-    // Attach thread after appending to DOM
-    attachThread(bubble, idea.id);
 }
 
 function renderHiddenSection(hiddenIdeas) {

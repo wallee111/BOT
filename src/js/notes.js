@@ -12,6 +12,7 @@ const { pageNotes, noteFolders } = activeStorage;
 import { ensureAuthSession } from '../lib/auth.js';
 import { showToast } from '../lib/toast.js';
 import { showConfirmDialog } from '../lib/confirm-dialog.js';
+import { showPromptDialog } from '../lib/prompt-dialog.js';
 import { escapeHtml } from '../lib/utils.js';
 
 // ── DOM refs ───────────────────────────────────────────────────
@@ -45,6 +46,10 @@ const notesEditorEmpty    = document.getElementById('notesEditorEmpty');
 const moveFolderMenu      = document.getElementById('moveFolderMenu');
 const moveFolderMenuContent = document.getElementById('moveFolderMenuContent');
 
+const folderContextMenu       = document.getElementById('folderContextMenu');
+const folderContextRenameBtn  = document.getElementById('folderContextRename');
+const folderContextDeleteBtn  = document.getElementById('folderContextDelete');
+
 // ── State ──────────────────────────────────────────────────────
 
 const state = {
@@ -61,6 +66,7 @@ let saveTimer = null;
 let searchTimer = null;
 let unsubscribeNotes = null;
 let unsubscribeFolders = null;
+let contextMenuFolderId = null;
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -111,19 +117,23 @@ function getFilteredNotes() {
     return notes;
 }
 
+// Ordered left-to-right so each panel's rest position (before/after the
+// active one) can be derived instead of hard-coded, keeping slide direction
+// correct for both forward (folders→list→editor) and backward navigation.
+const MOBILE_PANEL_ORDER = [
+    ['folders', notesFoldersPanel],
+    ['list', notesListPanel],
+    ['editor', notesEditorPanel],
+];
+
 function setMobileView(view) {
     state.mobileView = view;
-    notesFoldersPanel.removeAttribute('data-mobile-active');
-    notesListPanel.removeAttribute('data-mobile-active');
-    notesEditorPanel.removeAttribute('data-mobile-active');
+    const activeIndex = MOBILE_PANEL_ORDER.findIndex(([name]) => name === view);
 
-    if (view === 'folders') {
-        notesFoldersPanel.setAttribute('data-mobile-active', 'true');
-    } else if (view === 'list') {
-        notesListPanel.setAttribute('data-mobile-active', 'true');
-    } else if (view === 'editor') {
-        notesEditorPanel.setAttribute('data-mobile-active', 'true');
-    }
+    MOBILE_PANEL_ORDER.forEach(([, panel], index) => {
+        const pos = index === activeIndex ? 'active' : (index < activeIndex ? 'before' : 'after');
+        panel.setAttribute('data-mobile-pos', pos);
+    });
 }
 
 // ── Render functions ───────────────────────────────────────────
@@ -159,6 +169,16 @@ function renderFolders() {
                 </svg>
                 <span class="notes-folder-item__name">${escapeHtml(folder.name)}</span>
                 <span class="notes-folder-item__count">${count}</span>
+                <button type="button" class="notes-folder-item__menu-btn"
+                        data-folder-menu-id="${escapeHtml(folder.id)}"
+                        aria-label="Options for ${escapeHtml(folder.name)}"
+                        aria-haspopup="true" aria-expanded="false" title="Folder options">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="5" r="1.5"/>
+                        <circle cx="12" cy="12" r="1.5"/>
+                        <circle cx="12" cy="19" r="1.5"/>
+                    </svg>
+                </button>
             </li>
         `;
     }
@@ -373,11 +393,12 @@ async function deleteCurrentNote() {
 }
 
 async function createFolder() {
-    const name = prompt('Folder name:');
-    if (!name || !name.trim()) return;
+    const name = await showPromptDialog('New folder', { placeholder: 'Folder name', confirmLabel: 'Create' });
+    if (!name) return;
+    const nextSortOrder = state.folders.reduce((max, f) => Math.max(max, f.sortOrder ?? 0), -1) + 1;
     try {
-        await noteFolders.save({ name: name.trim(), sortOrder: state.folders.length });
-        showToast(`Folder "${name.trim()}" created`);
+        await noteFolders.save({ name, sortOrder: nextSortOrder });
+        showToast(`Folder "${name}" created`);
     } catch (err) {
         console.error('[notes] createFolder error:', err);
         showToast('Could not create folder', { tone: 'error' });
@@ -387,11 +408,11 @@ async function createFolder() {
 async function renameFolder(folderId) {
     const folder = state.folders.find(f => f.id === folderId);
     if (!folder) return;
-    const newName = prompt('Rename folder:', folder.name);
-    if (!newName || !newName.trim() || newName.trim() === folder.name) return;
+    const newName = await showPromptDialog('Rename folder', { defaultValue: folder.name, confirmLabel: 'Rename' });
+    if (!newName || newName === folder.name) return;
     try {
-        await noteFolders.save({ ...folder, name: newName.trim() });
-        showToast(`Renamed to "${newName.trim()}"`);
+        await noteFolders.save({ ...folder, name: newName });
+        showToast(`Renamed to "${newName}"`);
     } catch (err) {
         console.error('[notes] renameFolder error:', err);
         showToast('Could not rename folder', { tone: 'error' });
@@ -461,6 +482,26 @@ function hideMoveMenu() {
     // Wait for close transition before hiding
     setTimeout(() => moveFolderMenu.setAttribute('hidden', ''), 150);
     moveNoteBtn.setAttribute('aria-expanded', 'false');
+}
+
+// ── Folder context menu (rename/delete) ─────────────────────────
+
+function showFolderContextMenu(folderId, x, y, triggerEl) {
+    contextMenuFolderId = folderId;
+    folderContextMenu.removeAttribute('hidden');
+    folderContextMenu.style.top = `${y}px`;
+    folderContextMenu.style.left = `${x}px`;
+
+    requestAnimationFrame(() => folderContextMenu.classList.add('is-open'));
+    if (triggerEl) triggerEl.setAttribute('aria-expanded', 'true');
+}
+
+function hideFolderContextMenu() {
+    folderContextMenu.classList.remove('is-open');
+    setTimeout(() => folderContextMenu.setAttribute('hidden', ''), 150);
+    notesFolderList.querySelectorAll('.notes-folder-item__menu-btn[aria-expanded="true"]')
+        .forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+    contextMenuFolderId = null;
 }
 
 async function moveNoteToFolder(targetFolderId) {
@@ -683,6 +724,7 @@ function wireEvents() {
 
     // Folder list — click to select, right-click for context menu
     notesFolderList.addEventListener('click', (e) => {
+        if (e.target.closest('.notes-folder-item__menu-btn')) return;
         const item = e.target.closest('.notes-folder-item');
         if (!item) return;
         selectFolder(item.dataset.folderId);
@@ -696,17 +738,55 @@ function wireEvents() {
         selectFolder(item.dataset.folderId);
     });
 
+    // Right-click a folder → open the rename/delete context menu
     notesFolderList.addEventListener('contextmenu', (e) => {
         const item = e.target.closest('.notes-folder-item');
         if (!item) return;
         const folderId = item.dataset.folderId;
         if (folderId === '__all__') return;
         e.preventDefault();
-        const action = prompt('Type "rename" or "delete":');
-        if (!action) return;
-        const normalized = action.trim().toLowerCase();
-        if (normalized === 'rename') renameFolder(folderId);
-        else if (normalized === 'delete') deleteFolderAction(folderId);
+        showFolderContextMenu(folderId, e.clientX, e.clientY, null);
+    });
+
+    // Kebab "…" button on a folder row → open the same context menu
+    notesFolderList.addEventListener('click', (e) => {
+        const menuBtn = e.target.closest('.notes-folder-item__menu-btn');
+        if (!menuBtn) return;
+        e.stopPropagation();
+        const folderId = menuBtn.dataset.folderMenuId;
+        if (folderContextMenu.hasAttribute('hidden')) {
+            const rect = menuBtn.getBoundingClientRect();
+            showFolderContextMenu(folderId, rect.left, rect.bottom + 4, menuBtn);
+        } else {
+            hideFolderContextMenu();
+        }
+    });
+
+    folderContextRenameBtn.addEventListener('click', () => {
+        const folderId = contextMenuFolderId;
+        hideFolderContextMenu();
+        if (folderId) renameFolder(folderId);
+    });
+
+    folderContextDeleteBtn.addEventListener('click', () => {
+        const folderId = contextMenuFolderId;
+        hideFolderContextMenu();
+        if (folderId) deleteFolderAction(folderId);
+    });
+
+    // Close folder context menu on outside click or Escape
+    document.addEventListener('click', (e) => {
+        if (!folderContextMenu.hasAttribute('hidden') &&
+            !folderContextMenu.contains(e.target) &&
+            !e.target.closest('.notes-folder-item__menu-btn')) {
+            hideFolderContextMenu();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !folderContextMenu.hasAttribute('hidden')) {
+            hideFolderContextMenu();
+        }
     });
 
     // New note
@@ -760,6 +840,14 @@ function wireEvents() {
         const li = e.target.closest('.notes-checklist-item');
         if (!li) return;
         li.classList.toggle('is-checked', e.target.checked);
+        // Reflect onto the attribute too — the `checked` IDL property does not
+        // serialize into innerHTML, so without this the checked state is lost
+        // the moment the note content is saved and reloaded.
+        if (e.target.checked) {
+            e.target.setAttribute('checked', '');
+        } else {
+            e.target.removeAttribute('checked');
+        }
         scheduleSave();
     });
 

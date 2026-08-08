@@ -103,14 +103,14 @@
     border: none;
     border-radius: var(--md-sys-shape-corner-full);
     background: transparent;
-    color: var(--md-sys-color-on-surface-variant);
+    color: var(--md-sys-color-primary);
     cursor: pointer;
     flex-shrink: 0;
     transition: background var(--md-sys-motion-duration-short2, 100ms) ease;
 }
 
 .notes-back-btn:hover {
-    background: rgba(var(--md-sys-color-on-surface-rgb, 0 0 0), 0.08);
+    background: rgba(var(--md-sys-color-primary-rgb, 255 202 40), 0.12);
 }
 
 .notes-back-btn:focus-visible {
@@ -195,6 +195,41 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.notes-folder-item__menu-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: var(--md-sys-shape-corner-full, 50%);
+    background: transparent;
+    color: var(--md-sys-color-on-surface-variant);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--md-sys-motion-duration-short2, 100ms) ease,
+                background var(--md-sys-motion-duration-short2, 100ms) ease;
+}
+
+.notes-folder-item:hover .notes-folder-item__menu-btn,
+.notes-folder-item:focus-within .notes-folder-item__menu-btn,
+.notes-folder-item__menu-btn[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.notes-folder-item__menu-btn:hover {
+    background: rgba(var(--md-sys-color-on-surface-rgb, 0 0 0), 0.1);
+}
+
+/* Touch devices have no hover — always show the menu button */
+@media (hover: none) {
+    .notes-folder-item__menu-btn {
+        opacity: 1;
+    }
 }
 
 .notes-folder-item__count {
@@ -622,7 +657,8 @@
 
 /* ── Move folder dropdown (md3-menu) ───────────────────────────── */
 
-#moveFolderMenu {
+#moveFolderMenu,
+#folderContextMenu {
     position: fixed;
     z-index: 200;
     min-width: 180px;
@@ -652,34 +688,24 @@
         border-right: none;
         /* Account for bottom nav: 68px + safe area */
         padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-        /* Start off-screen to the left */
-        transform: translateX(-100%);
         transition: transform var(--md-sys-motion-duration-medium, 200ms) var(--md-sys-motion-easing-standard, ease);
         z-index: 10;
     }
 
-    /* Active panel slides in */
-    .notes-folders-panel[data-mobile-active="true"],
-    .notes-list-panel[data-mobile-active="true"],
-    .notes-editor-panel[data-mobile-active="true"] {
+    /* Position is relative to the active panel (set via data-mobile-pos in JS)
+       so a panel always exits/enters on the correct side regardless of
+       whether we're navigating forward or backward through the stack. */
+    [data-mobile-pos="before"] {
+        transform: translateX(-100%);
+    }
+
+    [data-mobile-pos="active"] {
         transform: translateX(0);
         z-index: 20;
     }
 
-    /* Panels to the right slide off to the right */
-    .notes-list-panel,
-    .notes-editor-panel {
+    [data-mobile-pos="after"] {
         transform: translateX(100%);
-    }
-
-    /* Folders panel always slides from the left when inactive */
-    .notes-folders-panel {
-        transform: translateX(-100%);
-    }
-
-    /* Active panel */
-    [data-mobile-active="true"] {
-        transform: translateX(0) !important;
     }
 
     /* Editor panel empty state padding on mobile */

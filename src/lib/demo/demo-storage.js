@@ -296,9 +296,20 @@ export function getDemoStorage() {
   const pageNotes = createMemoryStore(SEED_PAGE_NOTES, {
     sortFn: (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0),
   });
-  const noteFolders = createMemoryStore(SEED_NOTE_FOLDERS, {
+  const noteFoldersBase = createMemoryStore(SEED_NOTE_FOLDERS, {
     sortFn: (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
   });
+  const noteFolders = {
+    ...noteFoldersBase,
+    // Mirror the production cascade: notes in a deleted folder move to "No folder".
+    delete: async (id) => {
+      const notesInFolder = pageNotes.getCached().filter((n) => n.folderId === id);
+      for (const note of notesInFolder) {
+        await pageNotes.save({ ...note, folderId: null });
+      }
+      return noteFoldersBase.delete(id);
+    },
+  };
   const canvas = createDemoCanvas();
   const threadNotes = createDemoThreadNotes();
   const todosBase = createMemoryStore([], {

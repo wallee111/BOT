@@ -10,14 +10,14 @@
     <!-- Inline: apply saved theme before paint to avoid flash -->
     <script src="/theme-init.js"></script>
     <script src="/sw-register.js" defer></script>
-  <script type="module" crossorigin src="/assets/notes-C4hDqITk.js"></script>
+  <script type="module" crossorigin src="/assets/notes-BRSLaUCC.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
   <link rel="modulepreload" crossorigin href="/assets/preload-helper-BXl3LOEh.js">
   <link rel="modulepreload" crossorigin href="/assets/vendor-BXWtuYvb.js">
   <link rel="modulepreload" crossorigin href="/assets/vendor-firebase-DmE5nZon.js">
-  <link rel="modulepreload" crossorigin href="/assets/canvas-BvbT6BID.js">
-  <link rel="stylesheet" crossorigin href="/assets/notes-BJYxAhC0.css">
-  <link rel="stylesheet" crossorigin href="/assets/style-C59np1ui.css">
+  <link rel="modulepreload" crossorigin href="/assets/canvas-Be8PicTd.js">
+  <link rel="stylesheet" crossorigin href="/assets/notes-BFd17snq.css">
+  <link rel="stylesheet" crossorigin href="/assets/style-hiOU-wW-.css">
 </head>
 
 <body>
@@ -219,6 +219,14 @@
             <!-- Move-to-folder dropdown (md3-menu pattern) -->
             <div id="moveFolderMenu" class="md3-menu" hidden role="menu" aria-label="Move note to folder">
                 <div id="moveFolderMenuContent" class="md3-menu__scroll"></div>
+            </div>
+
+            <!-- Folder context menu (rename/delete) -->
+            <div id="folderContextMenu" class="md3-menu" hidden role="menu" aria-label="Folder options">
+                <div class="md3-menu__scroll">
+                    <button type="button" class="md3-menu__item" id="folderContextRename" role="menuitem">Rename</button>
+                    <button type="button" class="md3-menu__item md3-menu__item--danger" id="folderContextDelete" role="menuitem">Delete</button>
+                </div>
             </div>
 
         </div>

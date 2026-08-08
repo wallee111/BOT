@@ -3512,56 +3512,6 @@ button.category-pill:focus-visible {
     display: none;
 }
 
-/* ── Resurface Card ────────────────────────────────────────────── */
-
-.resurface-card {
-    background: var(--md-sys-color-surface-container-high);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: var(--md-sys-shape-corner-large);
-    padding: 0.75rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    box-shadow: var(--md-sys-elevation-1);
-}
-
-.resurface-card__time {
-    font-size: var(--md-sys-typescale-label-small-size);
-    font-weight: 600;
-    color: var(--md-sys-color-primary);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    padding: 0 0.25rem;
-}
-
-.resurface-card > .idea-bubble {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-
-.resurface-card__actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0 0.25rem;
-}
-
-.resurface-card__dismiss {
-    font-size: var(--md-sys-typescale-label-large-size);
-    font-weight: var(--md-sys-typescale-label-large-weight);
-    padding: 6px 12px;
-    border-radius: var(--md-sys-shape-corner-full);
-    border: none;
-    background: transparent;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--md-sys-color-on-surface-variant);
-    cursor: pointer;
-}
-
 /* ══════════════════════════════════════════════════════════════════
    Capture FAB + Overlay
    ══════════════════════════════════════════════════════════════════ */
@@ -3872,6 +3822,24 @@ button.category-pill:focus-visible {
     font-size: var(--md-sys-typescale-body-large-size, 1rem);
     line-height: var(--md-sys-typescale-body-large-line-height, 1.5);
     margin: 0 0 20px;
+}
+
+.confirm-dialog__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    margin: 0 0 20px;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-sys-shape-corner-small, 8px);
+    background: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-on-surface);
+    font-family: var(--md-sys-typescale-body-large-font);
+    font-size: var(--md-sys-typescale-body-large-size, 1rem);
+}
+
+.confirm-dialog__input:focus {
+    outline: none;
+    border-color: var(--md-sys-color-primary);
 }
 
 .confirm-dialog__actions {
