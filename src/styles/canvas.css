@@ -1,24 +1,22 @@
 /* ── Canvas Page Layout ───────────────────────────────────────── */
 
-.canvas-page {
+/* Doubled class beats .main-content-wrap's padding and max-width regardless of
+   stylesheet order in the built bundle, so the canvas reaches all four screen
+   edges. The bottom nav and overlays float above it. */
+.main-content-wrap.canvas-page {
     max-width: none;
+    margin: 0;
     padding: 0;
     overflow: hidden;
     gap: 0;
     position: relative;
 }
 
-@media (max-width: 1023px) {
-    .canvas-page {
-        padding-bottom: 80px; /* clear mobile bottom nav */
-    }
-}
-
 /* ── Zoom Controls — top-right overlay ────────────────────────── */
 
 .canvas-zoom-overlay {
     position: absolute;
-    top: 12px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
     right: 12px;
     z-index: 10;
     display: flex;
