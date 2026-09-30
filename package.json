@@ -4,12 +4,12 @@
   "scripts": {
     "dev": "vite",
     "dev:mobile": "vite --host",
-    "build": "vite build",
+    "build": "vite build && node scripts/stamp-sw.mjs",
     "preview": "vite preview",
     "preview:mobile": "vite preview --host",
-    "cap:sync": "vite build && cap sync ios",
+    "cap:sync": "npm run build && cap sync ios",
     "cap:open": "cap open ios",
-    "cap:run": "vite build && cap sync ios && cap open ios",
+    "cap:run": "npm run build && cap sync ios && cap open ios",
     "test": "vitest run",
     "test:watch": "vitest"
   },

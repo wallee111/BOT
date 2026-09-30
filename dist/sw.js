@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'pwa-cache-v4';
+const CACHE_VERSION = 'pwa-cache-mskuiv6r';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
