@@ -780,6 +780,7 @@
     cursor: grab;
     user-select: none;
     touch-action: none;
+    white-space: nowrap;
 }
 
 .canvas-header.is-selected {
