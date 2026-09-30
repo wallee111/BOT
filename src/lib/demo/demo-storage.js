@@ -5,6 +5,7 @@ import {
   SEED_PAGE_NOTES,
   SEED_NOTE_FOLDERS,
   SEED_THREAD_NOTES,
+  SEED_TODOS,
 } from './seed-data.js';
 
 let instance = null;
@@ -312,7 +313,7 @@ export function getDemoStorage() {
   };
   const canvas = createDemoCanvas();
   const threadNotes = createDemoThreadNotes();
-  const todosBase = createMemoryStore([], {
+  const todosBase = createMemoryStore(SEED_TODOS, {
     sortFn: (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
   });
   const todos = {

@@ -273,3 +273,10 @@ export const SEED_THREAD_NOTES = {
     },
   ],
 };
+
+export const SEED_TODOS = [
+  { id: 'demo-todo-1', slot: 'morning', text: 'Review weekend plans', completed: true, sortOrder: 0, createdAt: daysAgo(1), userId: 'demo-user' },
+  { id: 'demo-todo-2', slot: 'morning', text: 'Jot down new app ideas', completed: false, sortOrder: 1, createdAt: daysAgo(1), userId: 'demo-user' },
+  { id: 'demo-todo-3', slot: 'afternoon', text: 'Sort ideas into categories', completed: false, sortOrder: 2, createdAt: daysAgo(1), userId: 'demo-user' },
+  { id: 'demo-todo-4', slot: 'evening', text: 'Read a chapter of my book', completed: false, sortOrder: 3, createdAt: daysAgo(1), userId: 'demo-user' },
+];
